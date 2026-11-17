@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Weather Locations · Scrobble Studio</title>
+  <meta name="theme-color" content="#d51007">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="sticky-top">
+    <header class="top">
+      <h1>Scrobble Studio</h1>
+      <div class="top-actions">
+        <a href="./" class="btn grey">← Back to dashboard</a>
+      </div>
+    </header>
+  </div>
+
+  <main class="narrow">
+    <section class="card">
+      <div class="card-head"><h2>Weather locations</h2></div>
+      <p class="hint" style="margin-top:0">
+        Tell the app where you lived and when. Each scrobble gets the weather of the place you lived at that time.
+        Leave <b>To</b> empty for the place you live now. Months are precise enough.
+      </p>
+      <p class="hint" id="range"></p>
+
+      <div class="loc-table-wrap">
+        <table class="loc-table">
+          <thead><tr><th>From</th><th>To</th><th>Place</th><th></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+
+      <div class="param-row" style="margin-top:12px">
+        <button class="btn ghost" id="addBtn">+ Add period</button>
+        <span style="flex:1"></span>
+        <button class="btn" id="saveBtn">Save locations</button>
+      </div>
+
+      <ul id="checks" class="checks"></ul>
+    </section>
+
+    <section class="card" style="margin-top:16px">
+      <div class="card-head">
+        <h2>Weather data</h2>
+        <button class="btn" id="weatherBtn">Download weather</button>
+      </div>
+      <p class="hint" style="margin-top:0">
+        Hourly weather from <a href="https://open-meteo.com" target="_blank">Open-Meteo</a> (free) for the places above.
+        Only missing days are downloaded. The first time takes a minute or two (keep this page open), after that a few seconds.
+        Save your locations first.
+      </p>
+      <ul class="checks" id="weatherStatus"></ul>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="js/engine.js"></script>
+  <script src="js/locations.js"></script>
+</body>
+</html>

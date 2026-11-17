@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Settings · Scrobble Studio</title>
+  <meta name="theme-color" content="#d51007">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="sticky-top">
+    <header class="top">
+      <h1>Scrobble Studio</h1>
+      <div class="top-actions"><a href="./" class="btn grey">← Back to dashboard</a></div>
+    </header>
+  </div>
+
+  <main class="narrow settings">
+    <section class="card">
+      <div class="card-head"><h2>1 · Last.fm</h2></div>
+      <p class="hint">Needed to update your scrobbles. Get a free API key at
+        <a href="https://www.last.fm/api/account/create" target="_blank">last.fm/api/account/create</a>
+        (any name and description; leave the callback empty).</p>
+      <div class="form-grid">
+        <label for="lfUser">Username</label><input id="lfUser" autocomplete="username" placeholder="your Last.fm name">
+        <label for="lfKey">API key</label><input id="lfKey" autocomplete="off" spellcheck="false" placeholder="32 letters and numbers">
+      </div>
+      <div class="param-row"><span style="flex:1"></span><button class="btn" id="saveLastfm">Save</button></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>2 · Your scrobbles on this device</h2></div>
+      <ul class="checks" id="dataStatus"></ul>
+      <p class="hint">Import your existing <b>Scrobbles.csv</b> (fast). On a phone you can pick it straight from OneDrive.
+        Or download your whole history from Last.fm (about 25 minutes; keep the screen on).</p>
+      <div class="param-row">
+        <label class="btn ghost file-btn">Import Scrobbles.csv<input type="file" id="csvFile" accept=".csv,text/csv" hidden></label>
+        <button class="btn grey" id="downloadAll">Download from Last.fm</button>
+      </div>
+      <p class="msg" id="importMsg"></p>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>3 · Spotify</h2></div>
+      <p class="hint">To create playlists. In your app on
+        <a href="https://developer.spotify.com/dashboard" target="_blank">developer.spotify.com/dashboard</a>,
+        add this exact <b>Redirect URI</b>, then paste the app's <b>Client ID</b> below (no secret needed):</p>
+      <p><code id="redirectUri" class="copyable" title="Click to copy"></code></p>
+      <div class="form-grid">
+        <label for="spId">Client ID</label><input id="spId" autocomplete="off" spellcheck="false" placeholder="from the Spotify dashboard">
+      </div>
+      <div class="param-row">
+        <span id="spStatus" class="hint"></span><span style="flex:1"></span>
+        <button class="btn ghost" id="spDisconnect" hidden>Disconnect</button>
+        <button class="btn spotify" id="spConnect">Save &amp; connect</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>4 · Export for Power BI</h2></div>
+      <p class="hint">Downloads the same CSV files the PC version made: Scrobbles, scrobble_keys, weather_hourly,
+        locations and weather_codes. Put them in one folder and point Power BI at them.</p>
+      <div class="param-row"><button class="btn ghost" id="exportBtn">Download CSV files</button></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>5 · Start over</h2></div>
+      <p class="hint">Deletes all scrobbles, weather and locations stored on <b>this device</b>. Your Last.fm account and other devices aren't affected.</p>
+      <div class="param-row"><button class="btn" id="wipeBtn">Delete data on this device</button></div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="js/engine.js"></script>
+  <script src="js/settings.js"></script>
+</body>
+</html>

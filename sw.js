@@ -1,12 +1,11 @@
 // Service worker: lets Scrobble Studio open without internet and be installed as an app.
 // The app's own files are cached; your data lives in the browser's storage, not here.
 // Bump VERSION after changing files so devices pick up the new version.
-const VERSION = "ss-v1";
+const VERSION = "ss-v2";
 const FILES = [
   "./", "index.html", "settings.html", "locations.html", "style.css",
-  "js/engine.js", "js/app.js", "js/settings.js", "js/locations.js",
+  "js/engine.js", "js/app.js", "js/settings.js", "js/locations.js", "js/chart.umd.min.js",
   "manifest.webmanifest", "icon-192.png", "icon-512.png",
-  "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js",
 ];
 
 self.addEventListener("install", (e) => {
@@ -24,8 +23,7 @@ self.addEventListener("activate", (e) => {
 // Everything else (Last.fm, Spotify, Open-Meteo) goes straight to the network.
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-  const ours = url.origin === location.origin || url.href.startsWith("https://cdnjs.cloudflare.com/");
-  if (e.request.method !== "GET" || !ours) return;
+  if (e.request.method !== "GET" || url.origin !== location.origin) return;
   e.respondWith(
     fetch(e.request)
       .then((res) => {

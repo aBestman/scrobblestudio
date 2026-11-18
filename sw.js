@@ -1,7 +1,7 @@
 // Service worker: lets Scrobble Studio open without internet and be installed as an app.
 // The app's own files are cached; your data lives in the browser's storage, not here.
 // Bump VERSION after changing files so devices pick up the new version.
-const VERSION = "ss-v4";
+const VERSION = "ss-v5";
 const FILES = [
   "./", "index.html", "settings.html", "locations.html", "style.css",
   "js/engine.js", "js/app.js", "js/settings.js", "js/locations.js", "js/chart.umd.min.js",

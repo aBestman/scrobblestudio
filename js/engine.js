@@ -367,7 +367,7 @@
   // longer period WITH the shorter period against its rank WITHOUT it.
   const PERIOD_NAMES = {
     today: "today", week: "this week", month: "this month", year: "this year",
-    "7d": "the last 7 days", "30d": "the last 30 days", "365d": "the last 365 days",
+    "7d": "the last 7 days", "30d": "the last 30 days", "365d": "the last 365 days", all: "all time",
   };
   function periodStart(key) {
     const now = new Date();
@@ -381,6 +381,7 @@
       case "7d": return back(6);
       case "30d": return back(29);
       case "365d": return back(364);
+      case "all": return "0000-01-01";                           // before any scrobble
       default: fail(`Unknown period: ${key}`);
     }
   }

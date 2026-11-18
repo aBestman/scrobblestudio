@@ -10,9 +10,9 @@ try { Object.assign(trend, JSON.parse(localStorage.getItem("ss-trend") || "{}"))
 const saveTrend = () => { try { localStorage.setItem("ss-trend", JSON.stringify(trend)); } catch {} };
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
-["#trendA", "#trendB"].forEach((sel) => {
-  $(sel).innerHTML = TREND_OPTIONS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
-});
+// B (the chart that changes) can also be your all-time chart.
+$("#trendA").innerHTML = TREND_OPTIONS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+$("#trendB").innerHTML = [...TREND_OPTIONS, ["all", "All time"]].map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
 function markTrendControls() {
   $("#trendA").value = trend.a;
   $("#trendB").value = trend.b;
@@ -22,7 +22,11 @@ function markTrendControls() {
 const changed = () => { saveTrend(); markTrendControls(); loadTrends().catch((e) => toast(e.message, 8000)); };
 $("#trendA").addEventListener("change", (e) => { trend.a = e.target.value; changed(); });
 $("#trendB").addEventListener("change", (e) => { trend.b = e.target.value; changed(); });
-$("#trendSwap").addEventListener("click", () => { [trend.a, trend.b] = [trend.b, trend.a]; changed(); });
+$("#trendSwap").addEventListener("click", () => {
+  if (trend.b === "all") { toast("All time can only be B (the chart that changes)."); return; }
+  [trend.a, trend.b] = [trend.b, trend.a];
+  changed();
+});
 $$("#trendN button").forEach((b) => b.addEventListener("click", () => { trend.n = Number(b.dataset.n); changed(); }));
 $$("#trendSort button").forEach((b) => b.addEventListener("click", () => { trend.sort = b.dataset.sort; saveTrend(); markTrendControls(); renderMovers(); }));
 markTrendControls();
@@ -73,7 +77,7 @@ async function loadTrends() {
 
   $("#trendQuestion").textContent = d.same
     ? `A and B are both ${R}`
-    : `How did ${R} change your chart for ${C}?`;
+    : `How did ${R} change your ${d.chart.key === "all" ? "all-time chart" : `chart for ${C}`}?`;
   let explain;
   if (d.same) explain = "Pick two different periods to see how one changed the other.";
   else if (!s.recent_plays) explain = `You haven't played anything ${R} yet, so your chart for ${C} is unchanged.`;
@@ -89,7 +93,7 @@ async function loadTrends() {
   };
   $("#trendStats").innerHTML = [
     `<div class="stat"><div class="v">${fmt(s.recent_plays)}</div><div class="l">plays ${R}</div></div>`,
-    `<div class="stat"><div class="v">${s.share}%</div><div class="l">of ${C}'s ${fmt(s.chart_plays)} plays</div></div>`,
+    `<div class="stat"><div class="v">${s.share}%</div><div class="l">of ${d.chart.key === "all" ? "all your" : `${C}'s`} ${fmt(s.chart_plays)} plays</div></div>`,
     hTile("h_artist", "artist h-index"), hTile("h_song", "song h-index"), hTile("h_album", "album h-index"),
     `<div class="stat" title="Songs you played for the very first time ${R}"><div class="v">${fmt(s.new_songs)}</div><div class="l">new songs ${R}</div></div>`,
     `<div class="stat" title="Artists you played for the very first time ${R}"><div class="v">${fmt(s.new_artists)}</div><div class="l">new artists ${R}</div></div>`,

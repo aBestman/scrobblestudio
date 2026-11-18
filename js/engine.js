@@ -90,6 +90,13 @@
   }
   function buildRows() {
     E.rows = E.raw.filter((r) => r[0] > 1e9).sort((a, b) => a[0] - b[0]).map(toRow);
+    // First day you ever played each song / artist (for "new discoveries" on the Trends page).
+    E.firstSong = new Map();
+    E.firstArtist = new Map();
+    for (const r of E.rows) {
+      if (!E.firstSong.has(r.key)) E.firstSong.set(r.key, r.ymd);
+      if (!E.firstArtist.has(r.artist)) E.firstArtist.set(r.artist, r.ymd);
+    }
     E.joined = false;
   }
   async function ensureData() {
@@ -352,6 +359,98 @@
       m.set(p, (m.get(p) || 0) + 1);
     }
     return { labels, series: topNames.map((a) => ({ artist: a, values: labels.map((l) => counts.get(a).get(l) || 0) })) };
+  }
+
+  // ------------------------------------------------------------------ Trends: how period A changed period B's chart
+  // Every period ends today, so the shorter one always sits inside the longer one
+  // (today ⊂ this week ⊂ this month …). For each song/artist/album we compare its rank in the
+  // longer period WITH the shorter period against its rank WITHOUT it.
+  const PERIOD_NAMES = {
+    today: "today", week: "this week", month: "this month", year: "this year",
+    "7d": "the last 7 days", "30d": "the last 30 days", "365d": "the last 365 days",
+  };
+  function periodStart(key) {
+    const now = new Date();
+    const t = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const back = (n) => ymdLocal(new Date(t.getFullYear(), t.getMonth(), t.getDate() - n));
+    switch (key) {
+      case "today": return ymdLocal(t);
+      case "week": return back((t.getDay() + 6) % 7);          // since Monday
+      case "month": return ymdLocal(new Date(t.getFullYear(), t.getMonth(), 1));
+      case "year": return `${t.getFullYear()}-01-01`;
+      case "7d": return back(6);
+      case "30d": return back(29);
+      case "365d": return back(364);
+      default: fail(`Unknown period: ${key}`);
+    }
+  }
+  // Competition ranking: equal play counts share a rank (1, 2, 2, 4 …).
+  function rankMap(counts) {
+    const sorted = [...counts].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])));
+    const ranks = new Map();
+    let prev = null, rank = 0;
+    sorted.forEach(([k, n], i) => { if (n !== prev) { rank = i + 1; prev = n; } ranks.set(k, rank); });
+    return { sorted, ranks };
+  }
+
+  function trends(q) {
+    const aKey = q.get("a") || "today", bKey = q.get("b") || "week";
+    const n = intArg(q.get("n"), 25, 5, 100);
+    const aStart = periodStart(aKey), bStart = periodStart(bKey);
+    const swapped = aStart < bStart;                   // A is the longer one: B becomes the "recent" period
+    const recentKey = swapped ? bKey : aKey, chartKey = swapped ? aKey : bKey;
+    const recentStart = swapped ? bStart : aStart, chartStart = swapped ? aStart : bStart;
+    const chart = E.rows.filter((r) => r.ymd >= chartStart);
+    const recent = chart.filter((r) => r.ymd >= recentStart);
+    const before = chart.filter((r) => r.ymd < recentStart);
+
+    const KINDS = {
+      track: { id: (r) => r.key, info: (r) => ({ track: r.track, artist: r.artist }) },
+      artist: { id: (r) => r.artist, info: (r) => ({ artist: r.artist }) },
+      album: { id: albumOf, info: (r) => ({ album: r.album, artist: r.artist }) },
+    };
+    const kinds = {};
+    for (const [name, K] of Object.entries(KINDS)) {
+      const info = new Map();
+      for (const r of chart) { const k = K.id(r); if (k !== null && !info.has(k)) info.set(k, K.info(r)); }
+      const cChart = countBy(chart, K.id), cBefore = countBy(before, K.id), cRecent = countBy(recent, K.id);
+      const now = rankMap(cChart), was = rankMap(cBefore);
+      const row = (k) => ({
+        id: k, ...info.get(k), plays: cChart.get(k) || 0, recent_plays: cRecent.get(k) || 0,
+        rank: now.ranks.get(k) ?? null, was: was.ranks.get(k) ?? null,
+      });
+      kinds[name] = {
+        items: now.sorted.slice(0, n).map(([k]) => row(k)),
+        // Pushed out of the top N by what happened in the recent period.
+        dropped: was.sorted.filter(([k]) => was.ranks.get(k) <= n && now.ranks.get(k) > n).slice(0, 5).map(([k]) => row(k)),
+      };
+    }
+
+    const hNow = hOverall(chart), hWas = hOverall(before);
+    const newSongs = new Set(recent.filter((r) => E.firstSong.get(r.key) >= recentStart).map((r) => r.key));
+    const newArtists = new Set(recent.filter((r) => E.firstArtist.get(r.artist) >= recentStart).map((r) => r.artist));
+
+    // Activity in the longer period, split into "before" and "recent" (days, or months for long periods).
+    const today = ymdLocal(new Date());
+    const long = (Date.parse(today) - Date.parse(chartStart)) / 86400000 > 120;
+    const P = long ? (r) => r.ym : (r) => r.ymd;
+    const labels = periodRange(long ? "month" : "day", long ? chartStart.slice(0, 7) : chartStart, long ? today.slice(0, 7) : today);
+    const cb = countBy(before, P), cr = countBy(recent, P);
+
+    return {
+      a: { key: aKey, label: PERIOD_NAMES[aKey], start: aStart },
+      b: { key: bKey, label: PERIOD_NAMES[bKey], start: bStart },
+      recent: { key: recentKey, label: PERIOD_NAMES[recentKey], start: recentStart },
+      chart: { key: chartKey, label: PERIOD_NAMES[chartKey], start: chartStart },
+      swapped, same: aStart === bStart, n,
+      summary: {
+        recent_plays: recent.length, chart_plays: chart.length,
+        share: chart.length ? Math.round((1000 * recent.length) / chart.length) / 10 : 0,
+        h_now: hNow, h_was: hWas, new_songs: newSongs.size, new_artists: newArtists.size,
+      },
+      kinds,
+      timeline: { by: long ? "month" : "day", labels, before: labels.map((l) => cb.get(l) || 0), recent: labels.map((l) => cr.get(l) || 0) },
+    };
   }
 
   function clock(q) {
@@ -1035,6 +1134,7 @@
       case "top": return top(q);
       case "artists-over-time": return artistsOverTime(q);
       case "clock": return clock(q);
+      case "trends": return trends(q);
       case "recent": return recent(q);
       case "playlist": return playlist(q);
       case "tags": return tags();

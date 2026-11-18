@@ -433,7 +433,7 @@ async function followUpdate(s) {
     toast(s.mode === "full"
       ? `Full reload done: ${fmt(s.total)} scrobbles (${s.added >= 0 ? "+" : ""}${fmt(s.added)} compared to before).`
       : `${fmt(s.added)} new scrobbles added (total ${fmt(s.total)}).`, 6000);
-    await loadAll();
+    await refreshPage();
   } catch (e) {
     toast("Update failed: " + e.message, 10000);
   } finally {
@@ -533,7 +533,12 @@ $("#previewBtn").addEventListener("click", async () => {
       months: [...document.querySelectorAll("#wMonths input:checked")].map((c) => c.value).join(","),
     });
   }
-  const query = kind === "top" || kind === "weather" ? rangeQuery(params) : new URLSearchParams(params).toString();
+  // Top tracks and Weather use Playlist Studio's own period (not the Scrobbles page filters).
+  if (kind === "top" || kind === "weather") {
+    if ($("#plStart").value) params.start = $("#plStart").value;
+    if ($("#plEnd").value) params.end = $("#plEnd").value;
+  }
+  const query = new URLSearchParams(params).toString();
 
   const btn = $("#previewBtn");
   btn.disabled = true;
@@ -579,6 +584,47 @@ $("#createBtn").addEventListener("click", async () => {
   }
 });
 
+// ---------------------------------------------------------------- Playlist Studio period
+$("#plRange").addEventListener("change", () => {
+  const r = $("#plRange").value;
+  if (r === "custom") return;
+  $("#plStart").value = rangeStart(r);
+  $("#plEnd").value = "";
+});
+["#plStart", "#plEnd"].forEach((s) => $(s).addEventListener("change", () => ($("#plRange").value = "custom")));
+
+async function loadPlaylistsPage() {
+  // Suggestions for the "Artist deep-dive" box: your top 100 artists of all time.
+  if (!$("#artistOptions").children.length) {
+    const d = await api("/api/top?kind=artist&limit=100");
+    $("#artistOptions").innerHTML = d.items.map((i) => `<option value="${esc(i.artist)}">`).join("");
+  }
+}
+
+// ---------------------------------------------------------------- pages (#scrobbles, #trends, #playlists)
+const PAGES = { scrobbles: "", trends: "· Trends", playlists: "· Playlist Studio" };
+let currentPage = null;
+
+function pageFromHash() {
+  const p = location.hash.slice(1);
+  return p in PAGES ? p : "scrobbles";
+}
+async function refreshPage() {
+  api("/api/data/info").then((i) => ($("#welcome").hidden = i.scrobbles > 0)).catch(() => {});
+  if (currentPage === "scrobbles") return loadAll();
+  if (currentPage === "trends") return window.loadTrends?.();
+  if (currentPage === "playlists") return loadPlaylistsPage();
+}
+function showPage() {
+  currentPage = pageFromHash();
+  document.querySelectorAll(".page[data-page], .filters[data-page]").forEach((el) => (el.hidden = el.dataset.page !== currentPage));
+  $("#pageTitle").textContent = PAGES[currentPage];
+  document.title = currentPage === "scrobbles" ? "Scrobble Studio" : `${PAGES[currentPage].slice(2)} · Scrobble Studio`;
+  window.scrollTo(0, 0);
+  refreshPage().catch((e) => toast(e.message, 8000));
+}
+window.addEventListener("hashchange", showPage);
+
 // ---------------------------------------------------------------- start
 (async () => {
   // Coming back from the Spotify login page? Finish logging in first.
@@ -586,7 +632,7 @@ $("#createBtn").addEventListener("click", async () => {
   // No data on this device yet: point to Settings.
   const info = await api("/api/data/info");
   $("#welcome").hidden = info.scrobbles > 0;
-  loadAll();
+  showPage();
   loadSpotify();
 })();
 

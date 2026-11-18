@@ -15,17 +15,16 @@
 <body>
   <div class="sticky-top">
     <header class="top">
-      <h1>Scrobble Studio</h1>
+      <h1>Scrobble Studio <span class="page-title" id="pageTitle"></span></h1>
       <div class="top-actions">
         <span id="spotifyStatus" class="pill">Spotify: checking…</span>
-        <a href="locations.html" class="btn ghost" title="Where you lived when, for weather data">Weather locations</a>
-        <a href="settings.html" class="btn ghost" title="Last.fm, Spotify, import and export">Settings</a>
         <button id="newBtn" class="btn grey">Checking…</button>
-        <button id="fullBtn" class="btn grey" title="Download your entire Last.fm history again and rebuild Scrobbles.csv">Full reload</button>
+        <button id="fullBtn" class="btn grey" title="Download your entire Last.fm history again and rebuild your data">Full reload</button>
       </div>
     </header>
 
-    <section class="filters">
+    <!-- Scrobbles page: filters -->
+    <section class="filters" data-page="scrobbles">
       <div class="quick">
         <button class="chip active all" data-range="all">All time</button>
         <button class="chip" data-range="year">This year</button>
@@ -52,11 +51,30 @@
         <label>To <input type="date" id="end"></label>
       </div>
     </section>
+
+    <!-- Trends page: compare selector -->
+    <section class="filters trends-bar" data-page="trends" hidden>
+      <div class="compare">
+        <label class="view-group"><span class="view-label">A · the short period</span>
+          <select id="trendA"></select></label>
+        <span class="compare-arrow" aria-hidden="true">→</span>
+        <label class="view-group"><span class="view-label">B · the chart it changes</span>
+          <select id="trendB"></select></label>
+        <button class="btn ghost compare-swap" id="trendSwap" title="Swap A and B" aria-label="Swap A and B">⇄</button>
+      </div>
+      <div class="view-group">
+        <span class="view-label">Chart size</span>
+        <div class="seg seg-neutral" id="trendN" role="group" aria-label="Chart size">
+          <button data-n="10">Top 10</button><button data-n="25">Top 25</button><button data-n="50">Top 50</button>
+        </div>
+      </div>
+    </section>
   </div>
 
+  <!-- ============================================================ Scrobbles -->
+  <div class="page" data-page="scrobbles">
   <div class="layout">
   <main>
-
     <section class="card welcome" id="welcome" hidden>
       <h2>Welcome to Scrobble Studio</h2>
       <p>There's no listening data on this device yet. Open <a href="settings.html">Settings</a> to fill in your Last.fm
@@ -95,9 +113,7 @@
     <section class="stats" id="stats"></section>
 
     <section class="card">
-      <div class="card-head">
-        <h2>Scrobbles over time</h2>
-      </div>
+      <div class="card-head"><h2>Scrobbles over time</h2></div>
       <div class="chart-box"><canvas id="timelineChart"></canvas></div>
       <div class="card-head" style="margin-top:22px"><h2 id="yearsTitle">Your top artists per year</h2></div>
       <div class="chart-box tall"><canvas id="yearsChart"></canvas></div>
@@ -108,9 +124,59 @@
       <div id="clock" class="clock"></div>
       <p class="hint">Darker = more plays. Hover a square for the number.</p>
     </section>
+  </main>
 
+  <aside class="card recent">
+    <div class="card-head"><h2>Recent scrobbles</h2><span class="hint" id="recentCount"></span></div>
+    <ol id="recentList" class="recent-list"></ol>
+  </aside>
+  </div>
+  </div>
+
+  <!-- ============================================================ Trends -->
+  <div class="page" data-page="trends" hidden>
+    <main class="page-main">
+      <section class="card trend-intro">
+        <h2 id="trendQuestion">How did today change this week's chart?</h2>
+        <p class="hint" id="trendExplain"></p>
+      </section>
+      <section class="stats" id="trendStats"></section>
+      <section class="card">
+        <div class="card-head"><h2 id="trendChartTitle">Plays this week</h2></div>
+        <div class="chart-box"><canvas id="trendChart"></canvas></div>
+      </section>
+      <div class="top-head">
+        <h2 id="trendListsTitle">Chart movers</h2>
+        <span style="flex:1"></span>
+        <div class="seg" id="trendSort" role="group" aria-label="Order">
+          <button data-sort="chart">Chart order</button><button data-sort="climb">Biggest climbers</button>
+        </div>
+      </div>
+      <div class="grid3">
+        <section class="card"><div class="card-head"><h2>Songs</h2></div><ol id="trendSongs" class="ranklist movers"></ol><div class="dropped" id="trendSongsDropped"></div></section>
+        <section class="card"><div class="card-head"><h2>Artists</h2></div><ol id="trendArtists" class="ranklist movers"></ol><div class="dropped" id="trendArtistsDropped"></div></section>
+        <section class="card"><div class="card-head"><h2>Albums</h2></div><ol id="trendAlbums" class="ranklist movers"></ol><div class="dropped" id="trendAlbumsDropped"></div></section>
+      </div>
+    </main>
+  </div>
+
+  <!-- ============================================================ Playlist Studio -->
+  <div class="page" data-page="playlists" hidden>
+    <main class="page-main">
     <section class="card maker" id="maker">
-      <div class="card-head"><h2>Playlist maker</h2></div>
+      <div class="card-head"><h2>Playlist Studio</h2></div>
+      <div class="param-row pl-period">
+        <label>Period
+          <select id="plRange">
+            <option value="all">All time</option><option value="year">This year</option><option value="month">This month</option>
+            <option value="week">This week</option><option value="365d">Last 365 days</option><option value="30d">Last 30 days</option>
+            <option value="7d">Last 7 days</option><option value="custom">Custom…</option>
+          </select>
+        </label>
+        <label>From <input type="date" id="plStart"></label>
+        <label>To <input type="date" id="plEnd"></label>
+        <span class="hint">Used by Top tracks and Weather.</span>
+      </div>
       <div class="tabs" id="tabs">
         <button class="tab active" data-kind="top">Top tracks</button>
         <button class="tab" data-kind="forgotten">Forgotten favourites</button>
@@ -122,7 +188,7 @@
 
       <div class="params">
         <div class="param-group" data-for="top">
-          <p class="hint">Uses the From / To dates at the top of the page.</p>
+          <p class="hint">Your most played songs in the period above.</p>
         </div>
         <div class="param-group" data-for="forgotten" hidden>
           <label>Played at least <input type="number" id="minPlays" value="10" min="1"> times</label>
@@ -180,7 +246,7 @@
             <label><input type="checkbox" value="9">Sep</label><label><input type="checkbox" value="10">Oct</label>
             <label><input type="checkbox" value="11">Nov</label><label><input type="checkbox" value="12">Dec</label>
           </div>
-          <p class="hint" id="wHint">Uses the weather from your <a href="locations.html">Weather locations</a>, and the From / To dates at the top.</p>
+          <p class="hint" id="wHint">Uses the weather from your <a href="locations.html">Weather locations</a> and the period above.</p>
         </div>
         <div class="param-row">
           <label>Number of songs <input type="number" id="limit" value="50" min="5" max="200"></label>
@@ -197,16 +263,13 @@
         <ol id="plList" class="ranklist removable"></ol>
       </div>
     </section>
-  </main>
-
-  <aside class="card recent">
-    <div class="card-head"><h2>Recent scrobbles</h2><span class="hint" id="recentCount"></span></div>
-    <ol id="recentList" class="recent-list"></ol>
-  </aside>
+    </main>
   </div>
 
   <div id="toast" class="toast" hidden></div>
   <script src="js/engine.js"></script>
+  <script src="js/nav.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/trends.js"></script>
 </body>
 </html>

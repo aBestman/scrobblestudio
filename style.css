@@ -92,6 +92,72 @@ h2 { font-size: 16px; margin: 0; }
 .months label { gap: 3px; font-size: 13px; color: var(--text); }
 .param-group a { color: var(--accent); }
 
+/* Anything with the hidden attribute stays hidden, whatever its display style */
+[hidden] { display: none !important; }
+
+/* ---------- Left sidebar (nav.js) ---------- */
+:root { --side: 220px; }
+body.side-collapsed { --side: 64px; }
+body { padding-left: var(--side); transition: padding-left .2s; }
+.sidebar {
+  position: fixed; left: 0; top: 0; bottom: 0; width: var(--side); z-index: 30;
+  display: flex; flex-direction: column; gap: 2px; padding: 12px 10px;
+  background: var(--card); border-right: 1px solid var(--line); transition: width .2s, transform .2s; overflow: hidden;
+}
+.side-brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px 14px; font-weight: 700; white-space: nowrap; }
+.side-logo { display: inline-flex; width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: #fff; align-items: center; justify-content: center; flex: none; }
+.side-logo svg { width: 18px; height: 18px; }
+.side-link {
+  display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 10px; white-space: nowrap;
+  color: var(--text); text-decoration: none; font: inherit; border: 0; background: none; cursor: pointer; text-align: left;
+}
+.side-logo svg { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.side-link svg, .burger svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.side-link:hover { background: var(--bg); }
+.side-link.active { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); font-weight: 600; }
+.side-sep { height: 1px; background: var(--line); margin: 8px 6px; }
+.side-fill { flex: 1; }
+.side-collapse { color: var(--muted); }
+body.side-collapsed .side-text { display: none; }
+body.side-collapsed .side-collapse svg { transform: rotate(180deg); }
+.burger { display: none; border: 0; background: none; color: var(--text); padding: 4px; margin-right: 4px; cursor: pointer; }
+.side-scrim { display: none; }
+.top h1 { display: flex; align-items: center; gap: 6px; }
+.page-title { color: var(--muted); font-weight: 500; }
+.page-main { max-width: 1400px; margin: 0 auto; padding: 20px 16px 60px; display: grid; gap: 16px; }
+
+@media (max-width: 800px) {
+  body, body.side-collapsed { padding-left: 0; --side: 240px; }
+  body .side-text { display: inline !important; }
+  .sidebar { transform: translateX(-100%); box-shadow: 0 0 24px rgba(0,0,0,.2); }
+  body.side-open .sidebar { transform: none; }
+  body.side-open .side-scrim { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 25; }
+  .side-collapse { display: none; }
+  .burger { display: inline-flex; }
+}
+
+/* ---------- Trends page ---------- */
+.trends-bar { justify-content: flex-start; gap: 16px 28px; }
+.compare { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.compare select { min-width: 150px; }
+.compare-arrow { font-size: 20px; color: var(--muted); padding-bottom: 6px; }
+.compare-swap { padding: 6px 12px; }
+.trend-intro h2 { font-size: 20px; }
+.trend-intro p { margin: 6px 0 0; }
+.ranklist.movers { max-height: 520px; }
+.ranklist.movers li { padding: 6px 4px; }
+.ranklist.movers li.touched { background: color-mix(in srgb, var(--accent) 6%, transparent); border-radius: 4px; }
+.ranklist.movers .t, .ranklist.movers .a { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mv { display: inline-block; min-width: 38px; text-align: center; font-size: 12px; font-weight: 700; padding: 2px 6px; border-radius: 999px; }
+.mv.up { color: #1a9e48; background: color-mix(in srgb, #1a9e48 14%, transparent); }
+.mv.down { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.mv.new { color: #fff; background: var(--accent); }
+.mv.same { color: var(--muted); }
+.stat .v .mv { font-size: 13px; vertical-align: middle; }
+.dropped { margin-top: 8px; font-size: 13px; }
+.dropped .drop { white-space: nowrap; }
+.pl-period { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+
 /* Browser version: welcome card, settings page */
 .welcome { border-color: var(--accent); }
 .welcome p { margin: 8px 0 0; }

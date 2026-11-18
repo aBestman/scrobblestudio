@@ -95,23 +95,7 @@ async function loadTrends() {
     `<div class="stat" title="Artists you played for the very first time ${R}"><div class="v">${fmt(s.new_artists)}</div><div class="l">new artists ${R}</div></div>`,
   ].join("");
 
-  $("#trendChartTitle").textContent = `Plays ${C}, per ${d.timeline.by}`;
   $("#trendListsTitle").textContent = `Chart movers: ${C}`;
-  drawChart("trendChart", {
-    type: "bar",
-    data: {
-      labels: d.timeline.labels,
-      datasets: [
-        { label: `Before ${R}`, data: d.timeline.before, backgroundColor: css("--muted") + "66", borderRadius: 2, stack: "s" },
-        { label: cap(R), data: d.timeline.recent, backgroundColor: css("--accent"), borderRadius: 2, stack: "s" },
-      ],
-    },
-    options: {
-      maintainAspectRatio: false,
-      plugins: { legend: { position: "top", align: "end", labels: { boxWidth: 12 } } },
-      scales: { x: { stacked: true, grid: { display: false }, ticks: { maxTicksLimit: 16 } }, y: { stacked: true, beginAtZero: true } },
-    },
-  });
   renderMovers();
 }
 window.loadTrends = loadTrends;

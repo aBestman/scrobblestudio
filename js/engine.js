@@ -430,13 +430,6 @@
     const newSongs = new Set(recent.filter((r) => E.firstSong.get(r.key) >= recentStart).map((r) => r.key));
     const newArtists = new Set(recent.filter((r) => E.firstArtist.get(r.artist) >= recentStart).map((r) => r.artist));
 
-    // Activity in the longer period, split into "before" and "recent" (days, or months for long periods).
-    const today = ymdLocal(new Date());
-    const long = (Date.parse(today) - Date.parse(chartStart)) / 86400000 > 120;
-    const P = long ? (r) => r.ym : (r) => r.ymd;
-    const labels = periodRange(long ? "month" : "day", long ? chartStart.slice(0, 7) : chartStart, long ? today.slice(0, 7) : today);
-    const cb = countBy(before, P), cr = countBy(recent, P);
-
     return {
       a: { key: aKey, label: PERIOD_NAMES[aKey], start: aStart },
       b: { key: bKey, label: PERIOD_NAMES[bKey], start: bStart },
@@ -449,7 +442,6 @@
         h_now: hNow, h_was: hWas, new_songs: newSongs.size, new_artists: newArtists.size,
       },
       kinds,
-      timeline: { by: long ? "month" : "day", labels, before: labels.map((l) => cb.get(l) || 0), recent: labels.map((l) => cr.get(l) || 0) },
     };
   }
 

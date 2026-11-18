@@ -604,7 +604,7 @@ async function loadPlaylistsPage() {
 }
 
 // ---------------------------------------------------------------- pages (#scrobbles, #trends, #playlists)
-const PAGES = { scrobbles: "", trends: "· Trends", playlists: "· Playlist Studio" };
+const PAGES = { scrobbles: "", trends: "· Trends", race: "· Bar race", playlists: "· Playlist Studio" };
 let currentPage = null;
 
 function pageFromHash() {
@@ -615,6 +615,7 @@ async function refreshPage() {
   api("/api/data/info").then((i) => ($("#welcome").hidden = i.scrobbles > 0)).catch(() => {});
   if (currentPage === "scrobbles") return loadAll();
   if (currentPage === "trends") return window.loadTrends?.();
+  if (currentPage === "race") return window.loadRace?.();
   if (currentPage === "playlists") return loadPlaylistsPage();
 }
 function showPage() {

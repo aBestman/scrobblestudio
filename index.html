@@ -8,9 +8,9 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=7">
+  <link rel="stylesheet" href="style.css?v=8">
   <!-- Chart.js 4.4.1 (official npm release), stored in this repository so no outside code runs in the app -->
-  <script src="js/chart.umd.min.js?v=7"></script>
+  <script src="js/chart.umd.min.js?v=8"></script>
 </head>
 <body>
   <div class="sticky-top">
@@ -262,10 +262,59 @@
     </main>
   </div>
 
+  <!-- ============================================================ Bar race -->
+  <div class="page" data-page="race" hidden>
+    <main class="page-main">
+      <section class="card race-form">
+        <div class="card-head"><h2>Bar race</h2></div>
+        <div class="race-grid">
+          <div class="view-group"><span class="view-label">What races</span>
+            <div class="seg" id="raceKind" role="group" aria-label="What races">
+              <button data-kind="artist">Artists</button><button data-kind="track">Songs</button><button data-kind="album">Albums</button>
+            </div>
+          </div>
+          <label class="view-group"><span class="view-label">Timeframe</span>
+            <select id="raceRange">
+              <option value="all">All time</option><option value="year">This year</option><option value="365d">Last 365 days</option>
+              <option value="30d">Last 30 days</option><option value="custom">Custom…</option>
+            </select></label>
+          <label class="view-group"><span class="view-label">From</span><input type="date" id="raceStart"></label>
+          <label class="view-group"><span class="view-label">To</span><input type="date" id="raceEnd"></label>
+          <label class="view-group"><span class="view-label">Bars shown</span><input type="number" id="raceN" min="3" max="30" value="10"></label>
+          <label class="view-group"><span class="view-label">Duration (seconds)</span><input type="number" id="raceDur" min="5" max="300" value="30"></label>
+          <label class="view-group"><span class="view-label">Step</span>
+            <select id="raceStep">
+              <option value="auto">Auto</option><option value="day">Per day</option><option value="week">Per week</option>
+              <option value="month">Per month</option><option value="year">Per year</option>
+            </select></label>
+          <label class="view-group"><span class="view-label">Mode</span>
+            <select id="raceMode">
+              <option value="cumulative">Running total</option>
+              <option value="rolling">Rolling window (what was hot)</option>
+            </select></label>
+          <label class="view-group" id="raceWinWrap" hidden><span class="view-label">Window (steps)</span><input type="number" id="raceWin" min="1" max="1000" value="12"></label>
+          <button class="btn" id="raceGo">Generate</button>
+        </div>
+        <p class="hint" id="raceHint">Running total: who has the most plays so far at each moment. Rolling window: who was hottest at each moment (e.g. the last 12 months).</p>
+      </section>
+
+      <section class="card race-stage">
+        <canvas id="raceCanvas" aria-label="Animated bar chart race"></canvas>
+        <div class="race-controls">
+          <button class="btn" id="racePlay" aria-label="Play">▶ Play</button>
+          <button class="btn ghost" id="raceRestart" aria-label="Restart">⟲</button>
+          <input type="range" id="raceScrub" min="0" max="1000" value="0" aria-label="Position in the race">
+          <button class="btn grey" id="raceRecord" title="Play the whole race once and save it as a video file">● Record video</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
   <div id="toast" class="toast" hidden></div>
-  <script src="js/engine.js?v=7"></script>
-  <script src="js/nav.js?v=7"></script>
-  <script src="js/app.js?v=7"></script>
-  <script src="js/trends.js?v=7"></script>
+  <script src="js/engine.js?v=8"></script>
+  <script src="js/nav.js?v=8"></script>
+  <script src="js/app.js?v=8"></script>
+  <script src="js/trends.js?v=8"></script>
+  <script src="js/race.js?v=8"></script>
 </body>
 </html>

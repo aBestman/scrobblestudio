@@ -158,6 +158,17 @@ body.side-collapsed .side-collapse svg { transform: rotate(180deg); }
 .dropped .drop { white-space: nowrap; }
 .pl-period { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 
+/* ---------- Bar race page ---------- */
+.race-grid { display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: flex-end; }
+.race-grid input[type="number"] { width: 90px; }
+.race-grid input, .race-grid select { padding: 6px 8px; }
+.race-form .hint { margin-top: 12px; }
+.race-stage { padding: 12px; }
+#raceCanvas { display: block; width: 100%; height: 480px; border-radius: 10px; }
+.race-controls { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.race-controls input[type="range"] { flex: 1; min-width: 160px; accent-color: var(--accent); }
+.race-controls .btn:disabled, .race-controls input:disabled { opacity: .5; cursor: not-allowed; }
+
 /* Browser version: welcome card, settings page */
 .welcome { border-color: var(--accent); }
 .welcome p { margin: 8px 0 0; }

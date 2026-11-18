@@ -446,6 +446,90 @@
     };
   }
 
+  // ------------------------------------------------------------------ Bar race: values per step for an animated ranking
+  const weekCache = new Map();
+  function weekOf(ymd) {                                       // Monday of that week, as YYYY-MM-DD
+    let k = weekCache.get(ymd);
+    if (!k) {
+      const d = new Date(ymd + "T12:00");
+      d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+      k = ymdLocal(d);
+      weekCache.set(ymd, k);
+    }
+    return k;
+  }
+  function raceSteps(step, first, last) {
+    if (step === "week") {
+      const out = [], d = new Date(weekOf(first) + "T12:00"), L = new Date(last + "T12:00");
+      while (d <= L) { out.push(ymdLocal(d)); d.setDate(d.getDate() + 7); }
+      return out;
+    }
+    if (step === "year") return periodRange("year", first.slice(0, 4), last.slice(0, 4));
+    if (step === "month") return periodRange("month", first.slice(0, 7), last.slice(0, 7));
+    return periodRange("day", first, last);
+  }
+  const RACE_KEY = { day: (r) => r.ymd, week: (r) => weekOf(r.ymd), month: (r) => r.ym, year: (r) => String(r.y) };
+
+  function barRace(q) {
+    const kind = ["track", "album"].includes(q.get("kind")) ? q.get("kind") : "artist";
+    const n = intArg(q.get("n"), 10, 3, 30);
+    const rolling = q.get("mode") === "rolling";
+    const win = intArg(q.get("window"), 12, 1, 1000);
+    const rows = filtered(q);
+    if (!rows.length) fail("No scrobbles in this timeframe.");
+    const first = rows[0].ymd, last = rows[rows.length - 1].ymd;
+    let step = q.get("step");
+    if (!RACE_KEY[step]) {                                     // auto: pick a step that gives a smooth but not endless race
+      const days = (Date.parse(last) - Date.parse(first)) / 86400000;
+      step = days > 1100 ? "month" : days > 150 ? "week" : "day";
+    }
+    const labels = raceSteps(step, first, last);
+    if (labels.length > 2500) fail(`That's ${labels.length.toLocaleString()} steps. Pick a coarser step (week, month or year).`);
+    const at = new Map(labels.map((l, i) => [l, i]));
+    const K = RACE_KEY[step];
+    const id = kind === "track" ? (r) => r.key : kind === "album" ? albumOf : (r) => r.artist;
+
+    const info = new Map();
+    const perStep = labels.map(() => new Map());
+    for (const r of rows) {
+      const k = id(r);
+      if (k === null) continue;
+      if (!info.has(k)) info.set(k, kind === "artist" ? { name: r.artist, artist: r.artist } : { name: kind === "track" ? r.track : r.album, sub: r.artist, artist: r.artist });
+      const m = perStep[at.get(K(r))];
+      m.set(k, (m.get(k) || 0) + 1);
+    }
+
+    // Walk through the steps: running total, or the sum of the last `win` steps.
+    function walk(onStep) {
+      const cur = new Map();
+      perStep.forEach((m, i) => {
+        for (const [k, v] of m) cur.set(k, (cur.get(k) || 0) + v);
+        if (rolling && i >= win) {
+          for (const [k, v] of perStep[i - win]) { const left = cur.get(k) - v; if (left > 0) cur.set(k, left); else cur.delete(k); }
+        }
+        onStep(cur, i);
+      });
+    }
+    // Pass 1: everyone who is ever in the top n (plus a few just below, so newcomers slide in smoothly).
+    const keep = new Set();
+    walk((cur) => {
+      [...cur].sort((a, b) => b[1] - a[1]).slice(0, n + 3).forEach(([k]) => keep.add(k));
+    });
+    // Pass 2: their values at every step.
+    const values = new Map([...keep].map((k) => [k, new Array(labels.length).fill(0)]));
+    const totals = [];
+    let running = 0;
+    walk((cur, i) => {
+      for (const k of keep) { const v = cur.get(k); if (v) values.get(k)[i] = v; }
+      running += [...perStep[i].values()].reduce((a, b) => a + b, 0);
+      totals.push(running);
+    });
+    return {
+      kind, step, n, mode: rolling ? "rolling" : "cumulative", window: win, labels, totals,
+      entities: [...keep].map((k) => ({ id: k, ...info.get(k), values: values.get(k) })),
+    };
+  }
+
   function clock(q) {
     const grid = Array.from({ length: 7 }, () => new Array(24).fill(0));
     for (const r of filtered(q)) grid[r.dow][r.hh]++;
@@ -1128,6 +1212,7 @@
       case "artists-over-time": return artistsOverTime(q);
       case "clock": return clock(q);
       case "trends": return trends(q);
+      case "barrace": return barRace(q);
       case "recent": return recent(q);
       case "playlist": return playlist(q);
       case "tags": return tags();

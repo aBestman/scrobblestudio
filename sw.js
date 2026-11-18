@@ -1,7 +1,8 @@
 // Service worker: lets Scrobble Studio open without internet and be installed as an app.
 // The app's own files are cached; your data lives in the browser's storage, not here.
-// Bump VERSION after changing files so devices pick up the new version.
-const VERSION = "ss-v5";
+// After changing files: bump VERSION here AND the ?v= number on every script/style link in the HTML pages,
+// so a new page never runs with old (cached) script files.
+const VERSION = "ss-v6";
 const FILES = [
   "./", "index.html", "settings.html", "locations.html", "style.css",
   "js/engine.js", "js/app.js", "js/settings.js", "js/locations.js", "js/chart.umd.min.js",
@@ -21,12 +22,14 @@ self.addEventListener("activate", (e) => {
 });
 
 // App files: network first (so updates arrive), cache as fallback when offline.
+// "no-cache" makes the browser check GitHub for a newer copy instead of reusing its own
+// 10-minute copy, which could mix new pages with old scripts.
 // Everything else (Last.fm, Spotify, Open-Meteo) goes straight to the network.
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== location.origin) return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request.url, { cache: "no-cache", credentials: "same-origin" })
       .then((res) => {
         const copy = res.clone();
         caches.open(VERSION).then((c) => c.put(e.request, copy));

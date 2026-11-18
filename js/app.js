@@ -433,7 +433,9 @@ async function followUpdate(s) {
     toast(s.mode === "full"
       ? `Full reload done: ${fmt(s.total)} scrobbles (${s.added >= 0 ? "+" : ""}${fmt(s.added)} compared to before).`
       : `${fmt(s.added)} new scrobbles added (total ${fmt(s.total)}).`, 6000);
-    await refreshPage();
+    // The update itself worked; a problem redrawing the page is reported separately.
+    try { await refreshPage(); }
+    catch (e) { toast(`Scrobbles updated, but this page couldn't redraw (${e.message}). Reload the page.`, 10000); }
   } catch (e) {
     toast("Update failed: " + e.message, 10000);
   } finally {

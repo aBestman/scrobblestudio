@@ -14,7 +14,6 @@
   const onIndex = !/(settings|locations)\.html$/.test(location.pathname);
   const ITEMS = [
     ["scrobbles", "Scrobbles", onIndex ? "#scrobbles" : "./#scrobbles"],
-    ["trends", "Trends", onIndex ? "#trends" : "./#trends"],
     ["race", "Bar race", onIndex ? "#race" : "./#race"],
     ["playlists", "Playlist Studio", onIndex ? "#playlists" : "./#playlists"],
     null,
@@ -63,7 +62,7 @@
   function mark() {
     const page = /locations\.html$/.test(location.pathname) ? "weather"
       : /settings\.html$/.test(location.pathname) ? "settings"
-      : (location.hash.slice(1) || "scrobbles");
+      : (location.hash.slice(1).replace("trends", "scrobbles") || "scrobbles");
     nav.querySelectorAll(".side-link[data-page]").forEach((a) => a.classList.toggle("active", a.dataset.page === page));
   }
   window.addEventListener("hashchange", mark);

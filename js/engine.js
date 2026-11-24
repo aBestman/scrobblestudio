@@ -446,6 +446,73 @@
     };
   }
 
+  // ------------------------------------------------------------------ Scrobbles page: backdrop (b) + insight (a)
+  // The backdrop is the big picture (default: this year); the insight is a shorter period inside it
+  // (default: today). Everything shows the backdrop's totals plus what the insight added (+N).
+  const LEVEL = { today: 0, week: 1, "7d": 1, month: 2, "30d": 2, year: 3, "365d": 3, all: 4 };
+  function overviewWindow(q) {
+    const bKey = q.get("b") || "year", aKey = q.get("a") || "today";
+    if (!(bKey in LEVEL) || !(aKey in LEVEL)) fail("Unknown period.");
+    if (LEVEL[aKey] >= LEVEL[bKey]) fail("The insight period must be at least one level shorter than the backdrop.");
+    const bStart = periodStart(bKey);
+    let aStart = periodStart(aKey);
+    if (aStart < bStart) aStart = bStart;          // e.g. a week that began last month: only its part inside the backdrop counts
+    return { aKey, bKey, aStart, bStart };
+  }
+  function splitRows(q) {
+    const w = overviewWindow(q);
+    const chart = filtered(q).filter((r) => r.ymd >= w.bStart);   // filtered(): the click selection only
+    return { w, chart, recent: chart.filter((r) => r.ymd >= w.aStart), before: chart.filter((r) => r.ymd < w.aStart) };
+  }
+
+  function overview(q) {
+    const { w, chart, recent, before } = splitRows(q);
+    const uniq = (rs, f) => { const s = new Set(); for (const r of rs) { const k = f(r); if (k !== null) s.add(k); } return s.size; };
+    const count = (f) => { const total = uniq(chart, f); return { total, added: total - uniq(before, f) }; };
+    const today = ymdLocal(new Date());
+    const firstDay = chart.length ? (chart[0].ymd > w.bStart ? chart[0].ymd : w.bStart) : today;
+    const daysB = Math.max(1, Math.round((Date.parse(today) - Date.parse(firstDay)) / 86400000) + 1);
+    const daysA = Math.max(1, Math.round((Date.parse(today) - Date.parse(w.aStart)) / 86400000) + 1);
+    return {
+      backdrop: { key: w.bKey, label: PERIOD_NAMES[w.bKey], start: w.bStart },
+      insight: { key: w.aKey, label: PERIOD_NAMES[w.aKey], start: w.aStart },
+      first: chart[0]?.ymd || null, last: chart[chart.length - 1]?.ymd || null,
+      scrobbles: { total: chart.length, added: recent.length },
+      artists: count((r) => r.artist), songs: count((r) => r.key), albums: count(albumOf),
+      per_day: Math.round((chart.length / daysB) * 10) / 10,
+      insight_per_day: Math.round((recent.length / daysA) * 10) / 10,
+      // Played for the very first time ever during the insight period
+      new_songs: new Set(recent.filter((r) => E.firstSong.get(r.key) >= w.aStart).map((r) => r.key)).size,
+      new_artists: new Set(recent.filter((r) => E.firstArtist.get(r.artist) >= w.aStart).map((r) => r.artist)).size,
+    };
+  }
+
+  // Top list of the backdrop, with what the insight added and how it moved each entry.
+  function movers(q) {
+    const { w, chart, recent, before } = splitRows(q);
+    const kind = ["track", "album"].includes(q.get("kind")) ? q.get("kind") : "artist";
+    const n = intArg(q.get("n"), 25, 5, 100);
+    const id = kind === "track" ? (r) => r.key : kind === "album" ? albumOf : (r) => r.artist;
+    const info = new Map(), songs = new Map();
+    for (const r of chart) {
+      const k = id(r);
+      if (k === null) continue;
+      if (!info.has(k)) info.set(k, kind === "track" ? { track: r.track, artist: r.artist } : kind === "album" ? { album: r.album, artist: r.artist } : { artist: r.artist });
+      if (kind !== "track") { let s = songs.get(k); if (!s) songs.set(k, (s = new Set())); s.add(r.key); }
+    }
+    const cChart = countBy(chart, id), cBefore = countBy(before, id), cRecent = countBy(recent, id);
+    const now = rankMap(cChart), was = rankMap(cBefore);
+    const row = (k) => ({
+      id: k, ...info.get(k), plays: cChart.get(k) || 0, added: cRecent.get(k) || 0,
+      songs: songs.get(k)?.size || 0, rank: now.ranks.get(k) ?? null, was: was.ranks.get(k) ?? null,
+    });
+    return {
+      insight: PERIOD_NAMES[w.aKey], n,
+      items: now.sorted.slice(0, n).map(([k]) => row(k)),
+      dropped: was.sorted.filter(([k]) => was.ranks.get(k) <= n && now.ranks.get(k) > n).slice(0, 5).map(([k]) => row(k)),
+    };
+  }
+
   // ------------------------------------------------------------------ Bar race: values per step for an animated ranking
   const weekCache = new Map();
   function weekOf(ymd) {                                       // Monday of that week, as YYYY-MM-DD
@@ -1213,6 +1280,8 @@
       case "clock": return clock(q);
       case "trends": return trends(q);
       case "barrace": return barRace(q);
+      case "overview": return overview(q);
+      case "movers": return movers(q);
       case "recent": return recent(q);
       case "playlist": return playlist(q);
       case "tags": return tags();

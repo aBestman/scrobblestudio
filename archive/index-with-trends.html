@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scrobble Studio</title>
+  <meta name="theme-color" content="#d51007">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css?v=8">
+  <!-- Chart.js 4.4.1 (official npm release), stored in this repository so no outside code runs in the app -->
+  <script src="js/chart.umd.min.js?v=8"></script>
+</head>
+<body>
+  <div class="sticky-top">
+    <header class="top">
+      <h1>Scrobble Studio <span class="page-title" id="pageTitle"></span></h1>
+      <div class="top-actions">
+        <span id="spotifyStatus" class="pill">Spotify: checking…</span>
+        <button id="newBtn" class="btn grey">Checking…</button>
+        <button id="fullBtn" class="btn grey" title="Download your entire Last.fm history again and rebuild your data">Full reload</button>
+      </div>
+    </header>
+
+    <!-- Scrobbles page: filters -->
+    <section class="filters" data-page="scrobbles">
+      <div class="quick">
+        <button class="chip active all" data-range="all">All time</button>
+        <button class="chip" data-range="year">This year</button>
+        <button class="chip" data-range="month">This month</button>
+        <button class="chip" data-range="week">This week</button>
+        <button class="chip" data-range="365d">Last 365 days</button>
+        <button class="chip" data-range="30d">Last 30 days</button>
+        <button class="chip" data-range="7d">Last 7 days</button>
+      </div>
+      <div class="view-opts">
+        <div class="view-group" title="How the time charts are grouped. This doesn't filter your data.">
+          <span class="view-label">Charts show</span>
+          <div class="seg seg-neutral" id="timeBy" role="group" aria-label="Chart granularity">
+            <button data-by="year">per year</button><button data-by="month">per month</button><button data-by="day">per day</button>
+          </div>
+        </div>
+        <div class="view-group" title="How many artists the 'Your top artists' chart draws (1-25). This doesn't filter your data.">
+          <label class="view-label" for="artistLines">Artists in chart</label>
+          <input type="number" id="artistLines" class="view-number" min="1" max="25" step="1" value="8">
+        </div>
+      </div>
+      <div class="dates">
+        <label>From <input type="date" id="start"></label>
+        <label>To <input type="date" id="end"></label>
+      </div>
+    </section>
+
+    <!-- Trends page: compare selector -->
+    <section class="filters trends-bar" data-page="trends" hidden>
+      <div class="compare">
+        <label class="view-group"><span class="view-label">A · the short period</span>
+          <select id="trendA"></select></label>
+        <span class="compare-arrow" aria-hidden="true">→</span>
+        <label class="view-group"><span class="view-label">B · the chart it changes</span>
+          <select id="trendB"></select></label>
+        <button class="btn ghost compare-swap" id="trendSwap" title="Swap A and B" aria-label="Swap A and B">⇄</button>
+      </div>
+      <div class="view-group">
+        <span class="view-label">Chart size</span>
+        <div class="seg seg-neutral" id="trendN" role="group" aria-label="Chart size">
+          <button data-n="10">Top 10</button><button data-n="25">Top 25</button><button data-n="50">Top 50</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================ Scrobbles -->
+  <div class="page" data-page="scrobbles">
+  <div class="layout">
+  <main>
+    <section class="card welcome" id="welcome" hidden>
+      <h2>Welcome to Scrobble Studio</h2>
+      <p>There's no listening data on this device yet. Open <a href="settings.html">Settings</a> to fill in your Last.fm
+        details and import your <b>Scrobbles.csv</b> (or download your history from Last.fm).</p>
+    </section>
+
+    <div class="top-head">
+      <h2>Top of this period</h2>
+      <span class="selection-pill" id="selectionPill" hidden>
+        Filtered to: <b id="selectionText"></b>
+        <button id="selectionClear" title="Clear (Esc)" aria-label="Clear selection">✕</button>
+      </span>
+      <span style="flex:1"></span>
+      <div class="seg" id="rankBy" role="group" aria-label="Rank by" title="H-index: songs with at least h plays each (for songs: months with at least h plays)">
+        <button data-rank="plays">By scrobbles</button><button data-rank="h">By h-index</button>
+      </div>
+      <div class="seg" id="topN" role="group" aria-label="How many to show">
+        <button data-n="10">Top 10</button><button data-n="25">Top 25</button><button data-n="50">Top 50</button><button data-n="100">Top 100</button>
+      </div>
+    </div>
+    <div class="grid3">
+      <section class="card">
+        <div class="card-head"><h2>Top artists</h2></div>
+        <ol id="artistList" class="ranklist bars"></ol>
+      </section>
+      <section class="card">
+        <div class="card-head"><h2>Top songs</h2></div>
+        <ol id="trackList" class="ranklist bars"></ol>
+      </section>
+      <section class="card">
+        <div class="card-head"><h2>Top albums</h2></div>
+        <ol id="albumList" class="ranklist bars"></ol>
+      </section>
+    </div>
+
+    <section class="stats" id="stats"></section>
+
+    <section class="card">
+      <div class="card-head"><h2>Scrobbles over time</h2></div>
+      <div class="chart-box"><canvas id="timelineChart"></canvas></div>
+      <div class="card-head" style="margin-top:22px"><h2 id="yearsTitle">Your top artists per year</h2></div>
+      <div class="chart-box tall"><canvas id="yearsChart"></canvas></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>When you listen</h2></div>
+      <div id="clock" class="clock"></div>
+      <p class="hint">Darker = more plays. Hover a square for the number.</p>
+    </section>
+  </main>
+
+  <aside class="card recent">
+    <div class="card-head"><h2>Recent scrobbles</h2><span class="hint" id="recentCount"></span></div>
+    <ol id="recentList" class="recent-list"></ol>
+  </aside>
+  </div>
+  </div>
+
+  <!-- ============================================================ Trends -->
+  <div class="page" data-page="trends" hidden>
+    <main class="page-main">
+      <section class="card trend-intro">
+        <h2 id="trendQuestion">How did today change this week's chart?</h2>
+        <p class="hint" id="trendExplain"></p>
+      </section>
+      <section class="stats" id="trendStats"></section>
+      <div class="top-head">
+        <h2 id="trendListsTitle">Chart movers</h2>
+        <span style="flex:1"></span>
+        <div class="seg" id="trendSort" role="group" aria-label="Order">
+          <button data-sort="chart">Chart order</button><button data-sort="climb">Biggest climbers</button>
+        </div>
+      </div>
+      <div class="grid3">
+        <section class="card"><div class="card-head"><h2>Artists</h2></div><ol id="trendArtists" class="ranklist movers"></ol><div class="dropped" id="trendArtistsDropped"></div></section>
+        <section class="card"><div class="card-head"><h2>Songs</h2></div><ol id="trendSongs" class="ranklist movers"></ol><div class="dropped" id="trendSongsDropped"></div></section>
+        <section class="card"><div class="card-head"><h2>Albums</h2></div><ol id="trendAlbums" class="ranklist movers"></ol><div class="dropped" id="trendAlbumsDropped"></div></section>
+      </div>
+    </main>
+  </div>
+
+  <!-- ============================================================ Playlist Studio -->
+  <div class="page" data-page="playlists" hidden>
+    <main class="page-main">
+    <section class="card maker" id="maker">
+      <div class="card-head"><h2>Playlist Studio</h2></div>
+      <div class="param-row pl-period">
+        <label>Period
+          <select id="plRange">
+            <option value="all">All time</option><option value="year">This year</option><option value="month">This month</option>
+            <option value="week">This week</option><option value="365d">Last 365 days</option><option value="30d">Last 30 days</option>
+            <option value="7d">Last 7 days</option><option value="custom">Custom…</option>
+          </select>
+        </label>
+        <label>From <input type="date" id="plStart"></label>
+        <label>To <input type="date" id="plEnd"></label>
+        <span class="hint">Used by Top tracks and Weather.</span>
+      </div>
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-kind="top">Top tracks</button>
+        <button class="tab" data-kind="forgotten">Forgotten favourites</button>
+        <button class="tab" data-kind="artists">Artist deep-dive</button>
+        <button class="tab" data-kind="genre">Genre deep-dive</button>
+        <button class="tab" data-kind="onthisday">On this day</button>
+        <button class="tab" data-kind="weather">Weather</button>
+      </div>
+
+      <div class="params">
+        <div class="param-group" data-for="top">
+          <p class="hint">Your most played songs in the period above.</p>
+        </div>
+        <div class="param-group" data-for="forgotten" hidden>
+          <label>Played at least <input type="number" id="minPlays" value="10" min="1"> times</label>
+          <label>…but not in the last <input type="number" id="months" value="12" min="1"> months</label>
+        </div>
+        <div class="param-group" data-for="artists" hidden>
+          <label class="wide">Artists (separate with commas)
+            <input type="text" id="artistInput" list="artistOptions" placeholder="e.g. Wolf Alice, Coldplay">
+          </label>
+          <datalist id="artistOptions"></datalist>
+        </div>
+        <div class="param-group" data-for="genre" hidden>
+          <label class="wide">Genre
+            <input type="text" id="tagInput" list="tagOptions" placeholder="e.g. indie rock">
+          </label>
+          <datalist id="tagOptions"></datalist>
+          <button class="btn ghost" id="loadTags">Suggest genres from my artists</button>
+          <p class="hint">The first time, this looks up genres for your top 200 artists on Last.fm. That takes about a minute, then it's saved.</p>
+        </div>
+        <div class="param-group" data-for="onthisday" hidden>
+          <label>Within <input type="number" id="window" value="3" min="0" max="30"> days of today, in earlier years</label>
+        </div>
+        <div class="param-group" data-for="weather" hidden>
+          <label>Weather
+            <select id="wCond">
+              <option value="rain">Rain</option>
+              <option value="heavy">Heavy rain</option>
+              <option value="snow">Snow</option>
+              <option value="clear">Sunny / clear</option>
+              <option value="cloudy">Grey / overcast</option>
+              <option value="fog">Fog</option>
+              <option value="storm">Thunderstorm</option>
+              <option value="any">Any weather</option>
+            </select>
+          </label>
+          <label>Match
+            <select id="wScope">
+              <option value="day">the whole day</option>
+              <option value="hour">the hour I listened</option>
+            </select>
+          </label>
+          <label>Rank by
+            <select id="wSort">
+              <option value="plays">most played</option>
+              <option value="typical">most typical for this weather</option>
+            </select>
+          </label>
+          <label>Temp. <input type="number" id="wTmin" placeholder="min" step="1"> to <input type="number" id="wTmax" placeholder="max" step="1"> °C</label>
+          <div class="months" id="wMonths">
+            <span class="hint">Months:</span>
+            <label><input type="checkbox" value="1">Jan</label><label><input type="checkbox" value="2">Feb</label>
+            <label><input type="checkbox" value="3">Mar</label><label><input type="checkbox" value="4">Apr</label>
+            <label><input type="checkbox" value="5">May</label><label><input type="checkbox" value="6">Jun</label>
+            <label><input type="checkbox" value="7">Jul</label><label><input type="checkbox" value="8">Aug</label>
+            <label><input type="checkbox" value="9">Sep</label><label><input type="checkbox" value="10">Oct</label>
+            <label><input type="checkbox" value="11">Nov</label><label><input type="checkbox" value="12">Dec</label>
+          </div>
+          <p class="hint" id="wHint">Uses the weather from your <a href="locations.html">Weather locations</a> and the period above.</p>
+        </div>
+        <div class="param-row">
+          <label>Number of songs <input type="number" id="limit" value="50" min="5" max="200"></label>
+          <button class="btn" id="previewBtn">Preview playlist</button>
+        </div>
+      </div>
+
+      <div id="preview" hidden>
+        <div class="param-row">
+          <label class="wide">Playlist name <input type="text" id="plName"></label>
+          <button class="btn spotify" id="createBtn">Create on Spotify</button>
+        </div>
+        <p id="createMsg" class="msg"></p>
+        <ol id="plList" class="ranklist removable"></ol>
+      </div>
+    </section>
+    </main>
+  </div>
+
+  <!-- ============================================================ Bar race -->
+  <div class="page" data-page="race" hidden>
+    <main class="page-main">
+      <section class="card race-form">
+        <div class="card-head"><h2>Bar race</h2></div>
+        <div class="race-grid">
+          <div class="view-group"><span class="view-label">What races</span>
+            <div class="seg" id="raceKind" role="group" aria-label="What races">
+              <button data-kind="artist">Artists</button><button data-kind="track">Songs</button><button data-kind="album">Albums</button>
+            </div>
+          </div>
+          <label class="view-group"><span class="view-label">Timeframe</span>
+            <select id="raceRange">
+              <option value="all">All time</option><option value="year">This year</option><option value="365d">Last 365 days</option>
+              <option value="30d">Last 30 days</option><option value="custom">Custom…</option>
+            </select></label>
+          <label class="view-group"><span class="view-label">From</span><input type="date" id="raceStart"></label>
+          <label class="view-group"><span class="view-label">To</span><input type="date" id="raceEnd"></label>
+          <label class="view-group"><span class="view-label">Bars shown</span><input type="number" id="raceN" min="3" max="30" value="10"></label>
+          <label class="view-group"><span class="view-label">Duration (seconds)</span><input type="number" id="raceDur" min="5" max="300" value="30"></label>
+          <label class="view-group"><span class="view-label">Step</span>
+            <select id="raceStep">
+              <option value="auto">Auto</option><option value="day">Per day</option><option value="week">Per week</option>
+              <option value="month">Per month</option><option value="year">Per year</option>
+            </select></label>
+          <label class="view-group"><span class="view-label">Mode</span>
+            <select id="raceMode">
+              <option value="cumulative">Running total</option>
+              <option value="rolling">Rolling window (what was hot)</option>
+            </select></label>
+          <label class="view-group" id="raceWinWrap" hidden><span class="view-label">Window (steps)</span><input type="number" id="raceWin" min="1" max="1000" value="12"></label>
+          <button class="btn" id="raceGo">Generate</button>
+        </div>
+        <p class="hint" id="raceHint">Running total: who has the most plays so far at each moment. Rolling window: who was hottest at each moment (e.g. the last 12 months).</p>
+      </section>
+
+      <section class="card race-stage">
+        <canvas id="raceCanvas" aria-label="Animated bar chart race"></canvas>
+        <div class="race-controls">
+          <button class="btn" id="racePlay" aria-label="Play">▶ Play</button>
+          <button class="btn ghost" id="raceRestart" aria-label="Restart">⟲</button>
+          <input type="range" id="raceScrub" min="0" max="1000" value="0" aria-label="Position in the race">
+          <button class="btn grey" id="raceRecord" title="Play the whole race once and save it as a video file">● Record video</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="js/engine.js?v=8"></script>
+  <script src="js/nav.js?v=8"></script>
+  <script src="js/app.js?v=8"></script>
+  <script src="js/trends.js?v=8"></script>
+  <script src="js/race.js?v=8"></script>
+</body>
+</html>

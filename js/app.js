@@ -1,4 +1,5 @@
-// Scrobble Studio - the dashboard page. Asks engine.js (window.api) for data and draws it.
+// Scrobble Studio - the pages. Asks engine.js (window.api) for data and draws it.
+// (The h-index UI and the old Trends page are archived in /archive; the engine still has the logic.)
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -16,18 +17,61 @@ function toast(text, ms = 4000) {
   toast._timer = setTimeout(() => (t.hidden = true), ms);
 }
 
+// ---------------------------------------------------------------- backdrop + insight
+// Backdrop = the big picture (totals and lists). Insight = a shorter recent period inside it;
+// what it added shows as green +N. The insight is always at least one level smaller.
+const LEVEL = { today: 0, week: 1, "7d": 1, month: 2, "30d": 2, year: 3, "365d": 3, all: 4 };
+const PERIOD_LABEL = {
+  all: "All time", year: "This year", "365d": "Last 365 days", month: "This month", "30d": "Last 30 days",
+  week: "This week", "7d": "Last 7 days", today: "Today",
+};
+const view = { b: "year", a: "today" };                         // defaults: this year + today
+try { Object.assign(view, JSON.parse(localStorage.getItem("ss-view") || "{}")); } catch {}
+if (!(LEVEL[view.a] < LEVEL[view.b])) Object.assign(view, { b: "year", a: "today" });
+
+function syncPanel() {
+  $("#backdrop").value = view.b;
+  [...$("#insight").options].forEach((o) => (o.disabled = LEVEL[o.value] >= LEVEL[view.b]));
+  $("#insight").value = view.a;
+  $("#panelSummary").textContent = `${PERIOD_LABEL[view.b]} · + ${PERIOD_LABEL[view.a].toLowerCase()}`;
+}
+function viewChanged(backdropChanged) {
+  try { localStorage.setItem("ss-view", JSON.stringify(view)); } catch {}
+  syncPanel();
+  if (backdropChanged) setGranularity(autoGranularity());
+  loadAll();
+}
+$("#backdrop").addEventListener("change", (e) => {
+  view.b = e.target.value;
+  if (LEVEL[view.a] >= LEVEL[view.b]) view.a = "today";        // keep the insight smaller than the backdrop
+  viewChanged(true);
+});
+$("#insight").addEventListener("change", (e) => { view.a = e.target.value; viewChanged(false); });
+// Phones: the panel folds into one summary line; tap to open.
+$("#panelToggle").addEventListener("click", () => {
+  const open = $(".panel").classList.toggle("open");
+  $("#panelToggle").setAttribute("aria-expanded", String(open));
+});
+
 // Click selection from the top lists (like Power BI cross-filtering).
 // kind: "artist" | "track" | "album"; ids: artist name / song key / "artist<US>album"; labels for the pill.
 let selection = { kind: null, ids: [], labels: {} };
-
-// Query string with the date filter and the click selection.
-// skipKind: the list the selection came from passes its own kind, so it keeps showing everything.
+function addSelection(p, skipKind) {
+  if (selection.kind && selection.kind !== skipKind) selection.ids.forEach((id) => p.append("sel_" + selection.kind, id));
+}
+// For the backdrop/insight answers (cards and lists).
+function viewQuery(extra = {}, skipKind = null) {
+  const p = new URLSearchParams({ b: view.b, a: view.a });
+  addSelection(p, skipKind);
+  for (const [k, v] of Object.entries(extra)) p.set(k, v);
+  return p.toString();
+}
+// For the date-based charts (timeline, artists over time, listening clock): the backdrop period.
 function rangeQuery(extra = {}, skipKind = null) {
   const p = new URLSearchParams();
-  if ($("#start").value) p.set("start", $("#start").value);
-  if ($("#end").value) p.set("end", $("#end").value);
-  if (selection.kind && selection.kind !== skipKind)
-    selection.ids.forEach((id) => p.append("sel_" + selection.kind, id));
+  const start = rangeStart(view.b);
+  if (start) p.set("start", start);
+  addSelection(p, skipKind);
   for (const [k, v] of Object.entries(extra)) p.set(k, v);
   return p.toString();
 }
@@ -42,122 +86,116 @@ function drawChart(id, config) {
   charts[id] = new Chart(document.getElementById(id), config);
 }
 
+// ---------------------------------------------------------------- cards
+const plus = (n) => `<span class="plus${n ? "" : " zero"}">+${fmt(n)}</span>`;
 async function loadStats() {
-  const s = await api("/api/summary?" + rangeQuery());
-  const tiles = [
-    [fmt(s.scrobbles), "scrobbles"],
-    [fmt(s.artists), "artists"],
-    [fmt(s.tracks), "different songs"],
-    [fmt(s.albums), "albums"],
-    [s.per_day, "plays per day"],
-    [s.first ? `${s.first} → ${s.last}` : "–", "period"],
-    [s.h_artist, "artist h-index", `${s.h_artist} artists with at least ${s.h_artist} plays each`],
-    [s.h_song, "song h-index", `${s.h_song} songs with at least ${s.h_song} plays each`],
-    [s.h_album, "album h-index", `${s.h_album} albums with at least ${s.h_album} plays each`],
-  ];
-  $("#stats").innerHTML = tiles
-    .map(([v, l, tip]) => `<div class="stat${tip ? " h" : ""}"${tip ? ` title="${esc(tip)}"` : ""}>
-      <div class="v"${l === "period" ? ' style="font-size:15px"' : ""}>${esc(v)}</div><div class="l">${l}</div></div>`)
-    .join("");
+  const s = await api("/api/overview?" + viewQuery());
+  const A = s.insight.label, B = s.backdrop.label;
+  $("#ovTitle").textContent = PERIOD_LABEL[view.b];
+  $("#ovHint").innerHTML = `${plus(1).replace("+1", "+N")} = what ${esc(A)} added`;
+  $("#listsTitle").textContent = view.b === "all" ? "All-time top" : `Top of ${B}`;
+  const tile = (value, label, added, tip) => `<div class="stat"${tip ? ` title="${esc(tip)}"` : ""}>
+    <div class="v">${value}${added === undefined ? "" : " " + plus(added)}</div><div class="l">${label}</div></div>`;
+  $("#stats").innerHTML = [
+    tile(fmt(s.scrobbles.total), "scrobbles", s.scrobbles.added, `${fmt(s.scrobbles.added)} of them ${A}`),
+    tile(fmt(s.artists.total), "artists", s.artists.added, `${fmt(s.artists.added)} artists played ${A} for the first time ${B === "all time" ? "ever" : B}`),
+    tile(fmt(s.songs.total), "different songs", s.songs.added, `${fmt(s.songs.added)} songs new to ${B}`),
+    tile(fmt(s.albums.total), "albums", s.albums.added, `${fmt(s.albums.added)} albums new to ${B}`),
+    tile(s.per_day, `plays per day · ${esc(A)}: ${s.insight_per_day}`),
+    tile(fmt(s.new_songs), `first-time songs ${esc(A)}`, undefined, "Songs you played for the very first time ever"),
+    tile(fmt(s.new_artists), `first-time artists ${esc(A)}`, undefined, "Artists you played for the very first time ever"),
+  ].join("");
 }
 
+// ---------------------------------------------------------------- timeline
 async function loadTimeline() {
   const d = await api("/api/timeline?" + rangeQuery({ by: granularity }));
-  const ink = css("--text");
+  $("#timelineTitle").textContent = `Scrobbles per ${granularity}`;
   drawChart("timelineChart", {
-    data: {
-      labels: d.labels,
-      datasets: [
-        { type: "bar", label: "Scrobbles", data: d.values, backgroundColor: css("--accent"), borderRadius: 2, yAxisID: "y", order: 2 },
-        // Artist h-index per period, on its own scale at the right.
-        { type: "line", label: "Artist h-index", data: d.h_artist, borderColor: ink, backgroundColor: ink,
-          borderWidth: 2, pointRadius: d.labels.length > 60 ? 0 : 3, yAxisID: "h", order: 1, tension: 0.25 },
-      ],
-    },
+    type: "bar",
+    data: { labels: d.labels, datasets: [{ label: "Scrobbles", data: d.values, backgroundColor: css("--accent"), borderRadius: 2 }] },
     options: {
       maintainAspectRatio: false,
-      interaction: { mode: "index", intersect: false },
-      plugins: {
-        legend: { display: true, position: "top", align: "end", labels: { boxWidth: 12 } },
-        tooltip: {
-          callbacks: {
-            label: (c) => (c.dataset.yAxisID === "h" ? ` Artist h-index: ${c.raw}` : ` Scrobbles: ${fmt(c.raw)}`),
-            footer: (items) => {
-              const i = items[0].dataIndex;
-              return `Song h-index: ${d.h_song[i]}   ·   Album h-index: ${d.h_album[i]}`;
-            },
-          },
-        },
-      },
-      scales: {
-        x: { grid: { display: false }, ticks: { maxTicksLimit: 16 } },
-        y: { beginAtZero: true, title: { display: true, text: "scrobbles" } },
-        h: { position: "right", beginAtZero: true, grid: { display: false }, title: { display: true, text: "artist h-index" } },
-      },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => ` ${fmt(c.raw)} scrobbles` } } },
+      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 16 } }, y: { beginAtZero: true } },
     },
   });
 }
 
-// ---------------------------------------------------------------- top lists (artists / songs / albums)
+// ---------------------------------------------------------------- top lists: backdrop chart + what the insight changed
 let topN = 25;
 try { topN = Number(localStorage.getItem("topN")) || 25; } catch {}
+let listSort = "chart";
+try { listSort = localStorage.getItem("ss-listsort") === "climb" ? "climb" : "chart"; } catch {}
 
-// A ranked list with a thin bar behind each row showing plays relative to #1.
-// Rank the lists by scrobbles or by h-index ("Rank by" switch). The other number is shown in the subtitle.
-let rankBy = "plays";
-try { rankBy = localStorage.getItem("rankBy") === "h" ? "h" : "plays"; } catch {}
-const H_TIPS = {
-  artist: (i) => `h-index ${i.h}: ${i.h} songs by this artist with at least ${i.h} plays each`,
-  track: (i) => `h-index ${i.h}: played in ${i.h} different months, at least ${i.h} times each`,
-  album: (i) => `h-index ${i.h}: ${i.h} songs on this album with at least ${i.h} plays each`,
-};
-
-const ID_OF = {
-  artist: (i) => i.artist,
-  track: (i) => i.key,
-  album: (i) => i.artist + "\x1f" + i.album,
-};
 const LABEL_OF = {
   artist: (i) => i.artist,
   track: (i) => `${i.track} (${i.artist})`,
   album: (i) => `${i.album} (${i.artist})`,
 };
+function moveBadge(i) {
+  if (i.was === null) return '<span class="mv new" title="New in this chart">NEW</span>';
+  const d = i.was - i.rank;
+  if (d > 0) return `<span class="mv up" title="Up ${d} place${d === 1 ? "" : "s"} (was #${i.was})">▲${d}</span>`;
+  if (d < 0) return `<span class="mv down" title="Down ${-d} place${d === -1 ? "" : "s"} (was #${i.was})">▼${-d}</span>`;
+  return "";
+}
 
-function renderRank(el, items, kind, title, sub) {
-  const val = (i) => (rankBy === "h" ? i.h : i.plays);
-  const max = items.length ? Math.max(...items.map(val), 1) : 1;
+function renderMovers(listEl, droppedEl, d, kind, title, sub) {
+  const A = d.insight;
+  let items = d.items.slice();
+  if (listSort === "climb") {
+    const score = (i) => (i.was === null ? 1e6 - i.rank : i.was - i.rank);
+    items.sort((x, y) => score(y) - score(x) || x.rank - y.rank);
+  }
+  const max = Math.max(1, ...items.map((i) => i.plays));
   const active = selection.kind === kind;
-  el.classList.toggle("has-selection", active);
-  el.innerHTML = items
-    .map((i) => {
-      const id = ID_OF[kind](i);
-      const picked = active && selection.ids.includes(id);
-      const other = rankBy === "h" ? `${fmt(i.plays)} plays` : `h ${i.h}`;
-      const subtitle = [sub ? sub(i) : "", other].filter(Boolean).join(" · ");
-      const shown = rankBy === "h" ? `h ${i.h}` : fmt(i.plays);
-      return `<li class="${picked ? "picked" : ""}" data-id="${esc(id)}" data-label="${esc(LABEL_OF[kind](i))}"
-        style="--w:${((100 * val(i)) / max).toFixed(1)}%" title="${esc(H_TIPS[kind](i))}&#10;Click to filter, Ctrl+click to add">
-        <span class="p">${shown}</span><span class="t">${esc(title(i))}</span><span class="a">${esc(subtitle)}</span></li>`;
-    })
-    .join("") || "<li>No plays in this period.</li>";
+  listEl.classList.toggle("has-selection", active);
+  listEl.innerHTML = items.map((i) => {
+    const picked = active && selection.ids.includes(i.id);
+    const subtitle = [sub ? sub(i) : "", i.was !== null && i.was !== i.rank ? `was #${i.was}` : ""].filter(Boolean).join(" · ");
+    const tip = `${fmt(i.plays)} plays, ${fmt(i.added)} of them ${A}\nClick to filter, Ctrl+click to add`;
+    return `<li value="${i.rank}" class="${picked ? "picked" : ""}" data-id="${esc(i.id)}" data-label="${esc(LABEL_OF[kind](i))}"
+      style="--w:${((100 * i.plays) / max).toFixed(1)}%" title="${esc(tip)}">
+      <span class="p"><b>${fmt(i.plays)}</b>${i.added ? `<span class="plus">+${fmt(i.added)}</span>` : ""}${moveBadge(i)}</span>
+      <span class="t">${esc(title(i))}</span><span class="a">${esc(subtitle)}</span></li>`;
+  }).join("") || "<li>No plays in this period.</li>";
+  droppedEl.innerHTML = d.dropped.length
+    ? `<span class="hint">Pushed out of the top ${d.n} by ${esc(A)}:</span> ` +
+      d.dropped.map((i) => `<span class="drop">${esc(title(i))} <span class="hint">#${i.was} → #${i.rank}</span></span>`).join(", ")
+    : "";
 }
-
 async function loadTopArtists() {
-  const d = await api("/api/top?" + rangeQuery({ kind: "artist", limit: topN, rank: rankBy }, "artist"));
-  renderRank($("#artistList"), d.items, "artist", (i) => i.artist,
-    (i) => `${fmt(i.songs)} ${i.songs === 1 ? "song" : "songs"}`);
-  $("#artistOptions").innerHTML = d.items.map((i) => `<option value="${esc(i.artist)}">`).join("");
+  const d = await api("/api/movers?" + viewQuery({ kind: "artist", n: topN }, "artist"));
+  renderMovers($("#artistList"), $("#artistDropped"), d, "artist", (i) => i.artist, (i) => `${fmt(i.songs)} ${i.songs === 1 ? "song" : "songs"}`);
 }
-
 async function loadTopTracks() {
-  const d = await api("/api/top?" + rangeQuery({ kind: "track", limit: topN, rank: rankBy }, "track"));
-  renderRank($("#trackList"), d.items, "track", (i) => i.track, (i) => i.artist);
+  const d = await api("/api/movers?" + viewQuery({ kind: "track", n: topN }, "track"));
+  renderMovers($("#trackList"), $("#trackDropped"), d, "track", (i) => i.track, (i) => i.artist);
 }
-
 async function loadTopAlbums() {
-  const d = await api("/api/top?" + rangeQuery({ kind: "album", limit: topN, rank: rankBy }, "album"));
-  renderRank($("#albumList"), d.items, "album", (i) => i.album, (i) => i.artist);
+  const d = await api("/api/movers?" + viewQuery({ kind: "album", n: topN }, "album"));
+  renderMovers($("#albumList"), $("#albumDropped"), d, "album", (i) => i.album, (i) => i.artist);
 }
+const loadLists = () => Promise.all([loadTopArtists(), loadTopTracks(), loadTopAlbums()]);
+
+function markListControls() {
+  $$("#topN button").forEach((b) => b.classList.toggle("active", Number(b.dataset.n) === topN));
+  $$("#listSort button").forEach((b) => b.classList.toggle("active", b.dataset.sort === listSort));
+}
+$$("#topN button").forEach((b) => b.addEventListener("click", () => {
+  topN = Number(b.dataset.n);
+  try { localStorage.setItem("topN", topN); } catch {}
+  markListControls();
+  loadLists();
+}));
+$$("#listSort button").forEach((b) => b.addEventListener("click", () => {
+  listSort = b.dataset.sort;
+  try { localStorage.setItem("ss-listsort", listSort); } catch {}
+  markListControls();
+  loadLists();
+}));
+markListControls();
 
 // ---------------------------------------------------------------- click selection (cross-filter)
 // Click: filter to that item (click again to clear). Ctrl/Cmd+click: add or remove items of the same list.
@@ -177,24 +215,20 @@ function select(kind, id, label, add) {
   showSelection();
   loadAll();
 }
-
 function clearSelection() {
   if (!selection.kind) return;
   selection = { kind: null, ids: [], labels: {} };
   showSelection();
   loadAll();
 }
-
 function showSelection() {
   const pill = $("#selectionPill");
   if (!selection.kind) { pill.hidden = true; return; }
   const names = selection.ids.map((id) => selection.labels[id] || id);
-  const shown = names.length > 3 ? `${names.slice(0, 3).join(", ")} +${names.length - 3}` : names.join(", ");
-  $("#selectionText").textContent = shown;
+  $("#selectionText").textContent = names.length > 3 ? `${names.slice(0, 3).join(", ")} +${names.length - 3}` : names.join(", ");
   pill.title = names.join("\n");
   pill.hidden = false;
 }
-
 [["artist", "#artistList"], ["track", "#trackList"], ["album", "#albumList"]].forEach(([kind, sel]) =>
   $(sel).addEventListener("click", (e) => {
     const li = e.target.closest("li[data-id]");
@@ -206,32 +240,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !e.target.closest?.("input, select, textarea")) clearSelection();
 });
 
-function markRankBy() {
-  $$("#rankBy button").forEach((b) => b.classList.toggle("active", b.dataset.rank === rankBy));
-}
-$$("#rankBy button").forEach((b) =>
-  b.addEventListener("click", () => {
-    rankBy = b.dataset.rank;
-    try { localStorage.setItem("rankBy", rankBy); } catch {}
-    markRankBy();
-    loadTopArtists(); loadTopTracks(); loadTopAlbums();
-  })
-);
-markRankBy();
-
-function markTopN() {
-  document.querySelectorAll("#topN button").forEach((b) => b.classList.toggle("active", Number(b.dataset.n) === topN));
-}
-document.querySelectorAll("#topN button").forEach((b) =>
-  b.addEventListener("click", () => {
-    topN = Number(b.dataset.n);
-    try { localStorage.setItem("topN", topN); } catch {}
-    markTopN();
-    loadTopArtists(); loadTopTracks(); loadTopAlbums();
-  })
-);
-markTopN();
-
+// ---------------------------------------------------------------- listening clock
 async function loadClock() {
   const { grid } = await api("/api/clock?" + rangeQuery());
   const max = Math.max(1, ...grid.flat());
@@ -248,7 +257,7 @@ async function loadClock() {
   $("#clock").innerHTML = html;
 }
 
-// Top artists over time, using the same year / month / day setting as "Scrobbles over time".
+// ---------------------------------------------------------------- top artists over time
 // How many artists (lines) to show: 1-25, remembered between visits.
 function artistLines() {
   const el = $("#artistLines");
@@ -265,7 +274,6 @@ $("#artistLines").addEventListener("input", () => {
     loadYears();
   }, 400);
 });
-
 // Colours: the fixed palette first, then evenly spread hues for line 9 and up.
 const lineColor = (i) => (i < PALETTE.length ? PALETTE[i] : `hsl(${Math.round((i * 137.5) % 360)}, 55%, 50%)`);
 
@@ -297,6 +305,7 @@ async function loadYears() {
   });
 }
 
+// ---------------------------------------------------------------- recent scrobbles (sidebar)
 async function loadRecent() {
   const { items } = await api("/api/recent?limit=25");
   const today = iso(new Date());
@@ -325,7 +334,7 @@ async function loadAll() {
   if (failed) toast("Something went wrong loading a chart: " + failed.reason.message, 8000);
 }
 
-// ---------------------------------------------------------------- date filter
+// ---------------------------------------------------------------- dates and chart granularity
 function iso(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -334,6 +343,7 @@ function rangeStart(range) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const daysBack = (n) => iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() - n));
   switch (range) {
+    case "today": return iso(today);
     case "year":  return `${now.getFullYear()}-01-01`;
     case "month": return iso(new Date(now.getFullYear(), now.getMonth(), 1));
     case "week":  return daysBack((today.getDay() + 6) % 7);   // back to Monday
@@ -343,50 +353,23 @@ function rangeStart(range) {
     default:      return "";                                   // all time
   }
 }
-function markChip(active) {
-  $$(".chip").forEach((c) => c.classList.toggle("active", c === active));
-}
-// Chart granularity ("Charts show per year / month / day" in the top bar). Not a filter.
+// Chart granularity ("Charts show per year / month / day"). Not a filter.
 let granularity = "year";
 function setGranularity(by) {
   granularity = by;
   $$("#timeBy button").forEach((b) => b.classList.toggle("active", b.dataset.by === by));
 }
-
-// Pick a sensible chart granularity for the chosen period:
-// all time -> per year, a year-ish period -> per month, anything shorter -> per day.
-// You can still change it in the dropdown; it resets when you change the period.
-function autoGranularity(range) {
-  if (range === "all") return "year";
-  if (range === "year" || range === "365d") return "month";
-  if (range) return "day";
-  const start = $("#start").value, end = $("#end").value || iso(new Date());   // own dates: go by length
-  if (!start) return "year";
-  const days = (new Date(end) - new Date(start)) / 86400000;
-  return days > 400 ? "year" : days > 62 ? "month" : "day";
+// all time -> per year, a year-ish backdrop -> per month, anything shorter -> per day.
+function autoGranularity() {
+  if (view.b === "all") return "year";
+  if (view.b === "year" || view.b === "365d") return "month";
+  return "day";
 }
-
-$$(".chip").forEach((chip) =>
-  chip.addEventListener("click", () => {
-    $("#start").value = rangeStart(chip.dataset.range);
-    $("#end").value = "";
-    markChip(chip);
-    setGranularity(autoGranularity(chip.dataset.range));
-    loadAll();
-  })
-);
-// Picking your own dates un-highlights the quick buttons.
-function ownDates() {
-  markChip(null);
-  setGranularity(autoGranularity(null));
-  loadAll();
-}
-$("#start").addEventListener("change", ownDates);
-$("#end").addEventListener("change", ownDates);
 $$("#timeBy button").forEach((b) =>
   b.addEventListener("click", () => { setGranularity(b.dataset.by); loadTimeline(); loadYears(); })
 );
-setGranularity(autoGranularity("all"));
+syncPanel();
+setGranularity(autoGranularity());
 
 // ---------------------------------------------------------------- update buttons
 // "What's new": red if the data wasn't loaded today, green if it was.
@@ -604,17 +587,17 @@ async function loadPlaylistsPage() {
 }
 
 // ---------------------------------------------------------------- pages (#scrobbles, #trends, #playlists)
-const PAGES = { scrobbles: "", trends: "· Trends", race: "· Bar race", playlists: "· Playlist Studio" };
+const PAGES = { scrobbles: "", race: "· Bar race", playlists: "· Playlist Studio" };
 let currentPage = null;
 
 function pageFromHash() {
   const p = location.hash.slice(1);
+  if (p === "trends") return "scrobbles";               // Trends was merged into Scrobbles
   return p in PAGES ? p : "scrobbles";
 }
 async function refreshPage() {
   api("/api/data/info").then((i) => ($("#welcome").hidden = i.scrobbles > 0)).catch(() => {});
   if (currentPage === "scrobbles") return loadAll();
-  if (currentPage === "trends") return window.loadTrends?.();
   if (currentPage === "race") return window.loadRace?.();
   if (currentPage === "playlists") return loadPlaylistsPage();
 }

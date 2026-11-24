@@ -158,6 +158,27 @@ body.side-collapsed .side-collapse svg { transform: rotate(180deg); }
 .dropped .drop { white-space: nowrap; }
 .pl-period { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 
+/* ---------- Scrobbles page: backdrop + insight panel, cards, lists ---------- */
+.panel { flex-direction: column; align-items: stretch; gap: 0; }
+.panel-body { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 28px; }
+.panel-body .view-opts { margin-left: 0; }
+.panel-toggle {
+  display: none; width: 100%; align-items: center; justify-content: space-between; gap: 8px;
+  font: inherit; font-weight: 600; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 10px; padding: 8px 12px; cursor: pointer;
+}
+.panel.open .chev { transform: rotate(180deg); }
+.chev { transition: transform .15s; color: var(--muted); }
+.overview-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.overview-head h2 { font-size: 20px; }
+.plus { color: #1a9e48; font-weight: 700; font-size: .62em; margin-left: 4px; vertical-align: middle; white-space: nowrap; }
+.plus.zero { color: var(--muted); font-weight: 500; }
+.overview-head .plus { font-size: 13px; margin: 0; }
+.ranklist.movers .p { display: flex; align-items: center; gap: 6px; }
+.ranklist.movers .p b { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
+.ranklist.movers .p .plus { font-size: 12px; margin: 0; }
+.ranklist.movers .mv { min-width: 0; padding: 1px 6px; font-size: 11px; }
+
 /* ---------- Bar race page ---------- */
 .race-grid { display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: flex-end; }
 .race-grid input[type="number"] { width: 90px; }
@@ -181,8 +202,19 @@ code.copyable { display: inline-block; padding: 6px 10px; border-radius: 8px; ba
 
 /* Phones: stack the top bar, smaller header, no sticky filter bar (it would fill the screen) */
 @media (max-width: 700px) {
-  .sticky-top { position: static; }
-  .top { padding: 10px 16px; }
+  /* Phones: header + folded filter panel stay at the top; kept compact so they don't eat the screen */
+  .sticky-top { position: sticky; }
+  .top { padding: 8px 12px; flex-wrap: nowrap; gap: 8px; }
+  .top h1 { font-size: 16px; min-width: 0; white-space: nowrap; overflow: hidden; }
+  .top .page-title, #spotifyStatus { display: none; }
+  .top-actions { flex-wrap: nowrap; margin-left: auto; }
+  .top-actions .btn { padding: 5px 10px; font-size: 12px; white-space: nowrap; }
+  .panel { padding: 0 12px 8px; }
+  .panel-toggle { display: flex; }
+  .panel-body { display: none; padding-top: 8px; }
+  .panel.open .panel-body { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+  .panel .compare select { min-width: 0; width: 100%; }
+  .panel .compare .view-group { flex: 1; }
   h1 { font-size: 18px; }
   .top-actions { gap: 6px; }
   .top-actions .btn { padding: 6px 12px; font-size: 13px; }

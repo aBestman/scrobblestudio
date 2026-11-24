@@ -108,14 +108,44 @@ async function loadStats() {
 }
 
 // ---------------------------------------------------------------- timeline
+// "Year" shows every year you have (ignores the backdrop); "month" and "day" follow the backdrop.
+// The click selection from the lists always applies.
+function chartQuery(extra = {}) {
+  if (granularity !== "year") return rangeQuery(extra);
+  const p = new URLSearchParams();
+  addSelection(p, null);
+  for (const [k, v] of Object.entries(extra)) p.set(k, v);
+  return p.toString();
+}
+let cumulative = false;
+try { cumulative = localStorage.getItem("ss-cumulative") === "1"; } catch {}
+$("#cumulative").checked = cumulative;
+$("#cumulative").addEventListener("change", (e) => {
+  cumulative = e.target.checked;
+  try { localStorage.setItem("ss-cumulative", cumulative ? "1" : "0"); } catch {}
+  loadTimeline();
+  loadYears();
+});
+const runningTotal = (values) => { let s = 0; return values.map((v) => (s += v)); };
+const periodWord = () => (granularity === "year" ? "year (all years)" : granularity);
+
 async function loadTimeline() {
-  const d = await api("/api/timeline?" + rangeQuery({ by: granularity }));
-  $("#timelineTitle").textContent = `Scrobbles per ${granularity}`;
+  const d = await api("/api/timeline?" + chartQuery({ by: granularity }));
+  $("#timelineTitle").textContent = cumulative ? `Scrobbles, running total per ${periodWord()}` : `Scrobbles per ${periodWord()}`;
+  const accent = css("--accent");
   drawChart("timelineChart", {
-    type: "bar",
-    data: { labels: d.labels, datasets: [{ label: "Scrobbles", data: d.values, backgroundColor: css("--accent"), borderRadius: 2 }] },
+    type: cumulative ? "line" : "bar",
+    data: {
+      labels: d.labels,
+      datasets: [{
+        label: "Scrobbles", data: cumulative ? runningTotal(d.values) : d.values,
+        backgroundColor: cumulative ? accent + "33" : accent, borderColor: accent, borderRadius: 2,
+        fill: cumulative, pointRadius: 0, borderWidth: 2, tension: 0.2,
+      }],
+    },
     options: {
       maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => ` ${fmt(c.raw)} scrobbles` } } },
       scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 16 } }, y: { beginAtZero: true } },
     },
@@ -123,8 +153,7 @@ async function loadTimeline() {
 }
 
 // ---------------------------------------------------------------- top lists: backdrop chart + what the insight changed
-let topN = 25;
-try { topN = Number(localStorage.getItem("topN")) || 25; } catch {}
+const topN = 100;                      // lists always hold the top 100 (they scroll; on phones: first 10 + "Show all")
 let listSort = "chart";
 try { listSort = localStorage.getItem("ss-listsort") === "climb" ? "climb" : "chart"; } catch {}
 
@@ -160,6 +189,9 @@ function renderMovers(listEl, droppedEl, d, kind, title, sub) {
       <span class="p"><b>${fmt(i.plays)}</b>${i.added ? `<span class="plus">+${fmt(i.added)}</span>` : ""}${moveBadge(i)}</span>
       <span class="t">${esc(title(i))}</span><span class="a">${esc(subtitle)}</span></li>`;
   }).join("") || "<li>No plays in this period.</li>";
+  const more = document.querySelector(`.more-btn[data-list="${listEl.id}"]`);
+  more.hidden = items.length <= 10;
+  more.textContent = listEl.classList.contains("expanded") ? "Show top 10" : `Show all ${items.length}`;
   droppedEl.innerHTML = d.dropped.length
     ? `<span class="hint">Pushed out of the top ${d.n} by ${esc(A)}:</span> ` +
       d.dropped.map((i) => `<span class="drop">${esc(title(i))} <span class="hint">#${i.was} → #${i.rank}</span></span>`).join(", ")
@@ -180,14 +212,14 @@ async function loadTopAlbums() {
 const loadLists = () => Promise.all([loadTopArtists(), loadTopTracks(), loadTopAlbums()]);
 
 function markListControls() {
-  $$("#topN button").forEach((b) => b.classList.toggle("active", Number(b.dataset.n) === topN));
   $$("#listSort button").forEach((b) => b.classList.toggle("active", b.dataset.sort === listSort));
 }
-$$("#topN button").forEach((b) => b.addEventListener("click", () => {
-  topN = Number(b.dataset.n);
-  try { localStorage.setItem("topN", topN); } catch {}
-  markListControls();
-  loadLists();
+// Phones: lists don't scroll inside themselves (that trapped your thumb); they show 10 rows and open fully here.
+$$(".more-btn").forEach((b) => b.addEventListener("click", () => {
+  const list = document.getElementById(b.dataset.list);
+  const open = list.classList.toggle("expanded");
+  b.textContent = open ? "Show top 10" : `Show all ${list.children.length}`;
+  if (!open) list.closest(".card").scrollIntoView({ block: "start", behavior: "smooth" });
 }));
 $$("#listSort button").forEach((b) => b.addEventListener("click", () => {
   listSort = b.dataset.sort;
@@ -241,21 +273,42 @@ document.addEventListener("keydown", (e) => {
 });
 
 // ---------------------------------------------------------------- listening clock
+// Phone held upright: days across, hours down (easier to read). Otherwise: hours across, days down.
+const portraitPhone = matchMedia("(max-width: 700px) and (orientation: portrait)");
+let clockGrid = null;
 async function loadClock() {
-  const { grid } = await api("/api/clock?" + rangeQuery());
+  clockGrid = (await api("/api/clock?" + rangeQuery())).grid;
+  renderClock();
+}
+function renderClock() {
+  const grid = clockGrid;
+  if (!grid) return;
   const max = Math.max(1, ...grid.flat());
   const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const cell = (d, h) => {
+    const n = grid[d][h];
+    const opacity = n === 0 ? 0.04 : 0.12 + 0.88 * (n / max);
+    return `<span class="cell" style="opacity:${opacity.toFixed(2)}" title="${days[d]} ${h}:00 – ${fmt(n)} plays"></span>`;
+  };
+  const vertical = portraitPhone.matches;
   let html = "<span></span>";
-  for (let h = 0; h < 24; h++) html += `<span class="hr">${h % 3 === 0 ? h : ""}</span>`;
-  grid.forEach((row, d) => {
-    html += `<span class="lab">${days[d]}</span>`;
-    row.forEach((n, h) => {
-      const opacity = n === 0 ? 0.04 : 0.12 + 0.88 * (n / max);
-      html += `<span class="cell" style="opacity:${opacity.toFixed(2)}" title="${days[d]} ${h}:00 – ${fmt(n)} plays"></span>`;
-    });
-  });
+  if (vertical) {
+    days.forEach((d) => (html += `<span class="hr">${d.slice(0, 2)}</span>`));
+    for (let h = 0; h < 24; h++) {
+      html += `<span class="lab">${h % 3 === 0 ? `${h}:00` : ""}</span>`;
+      for (let d = 0; d < 7; d++) html += cell(d, h);
+    }
+  } else {
+    for (let h = 0; h < 24; h++) html += `<span class="hr">${h % 3 === 0 ? h : ""}</span>`;
+    for (let d = 0; d < 7; d++) {
+      html += `<span class="lab">${days[d]}</span>`;
+      for (let h = 0; h < 24; h++) html += cell(d, h);
+    }
+  }
+  $("#clock").classList.toggle("vertical", vertical);
   $("#clock").innerHTML = html;
 }
+portraitPhone.addEventListener("change", renderClock);
 
 // ---------------------------------------------------------------- top artists over time
 // How many artists (lines) to show: 1-25, remembered between visits.
@@ -280,8 +333,9 @@ const lineColor = (i) => (i < PALETTE.length ? PALETTE[i] : `hsl(${Math.round((i
 async function loadYears() {
   const by = granularity;
   const n = artistLines();
-  $("#yearsTitle").textContent = `Your top ${n === 1 ? "artist" : n + " artists"} per ${by}`;
-  const d = await api("/api/artists-over-time?" + rangeQuery({ by, n }));
+  $("#yearsTitle").textContent = `Your top ${n === 1 ? "artist" : n + " artists"}${cumulative ? ", running total" : ""} per ${periodWord()}`;
+  const d = await api("/api/artists-over-time?" + chartQuery({ by, n }));
+  if (cumulative) d.series.forEach((s) => (s.values = runningTotal(s.values)));
   const many = d.series.length > 15;      // with lots of lines: no legend, tooltip shows only the line you hover
   drawChart("yearsChart", {
     type: "line",

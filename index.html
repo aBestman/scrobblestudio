@@ -8,9 +8,9 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=10">
   <!-- Chart.js 4.4.1 (official npm release), stored in this repository so no outside code runs in the app -->
-  <script src="js/chart.umd.min.js?v=9"></script>
+  <script src="js/chart.umd.min.js?v=10"></script>
 </head>
 <body>
   <div class="sticky-top">
@@ -48,18 +48,6 @@
             </select>
           </label>
         </div>
-        <div class="view-opts">
-          <div class="view-group" title="How the time charts are grouped. This doesn't filter your data.">
-            <span class="view-label">Charts show</span>
-            <div class="seg seg-neutral" id="timeBy" role="group" aria-label="Chart granularity">
-              <button data-by="year">per year</button><button data-by="month">per month</button><button data-by="day">per day</button>
-            </div>
-          </div>
-          <div class="view-group" title="How many artists the 'Your top artists' chart draws (1-25). This doesn't filter your data.">
-            <label class="view-label" for="artistLines">Artists in chart</label>
-            <input type="number" id="artistLines" class="view-number" min="1" max="25" step="1" value="8">
-          </div>
-        </div>
       </div>
     </section>
   </div>
@@ -90,32 +78,48 @@
       <div class="seg" id="listSort" role="group" aria-label="Order">
         <button data-sort="chart">Chart order</button><button data-sort="climb">Biggest climbers</button>
       </div>
-      <div class="seg" id="topN" role="group" aria-label="How many to show">
-        <button data-n="10">Top 10</button><button data-n="25">Top 25</button><button data-n="50">Top 50</button><button data-n="100">Top 100</button>
-      </div>
     </div>
     <div class="grid3">
       <section class="card">
         <div class="card-head"><h2>Top artists</h2></div>
         <ol id="artistList" class="ranklist bars movers"></ol>
+        <button class="more-btn" type="button" data-list="artistList">Show all</button>
         <div class="dropped" id="artistDropped"></div>
       </section>
       <section class="card">
         <div class="card-head"><h2>Top songs</h2></div>
         <ol id="trackList" class="ranklist bars movers"></ol>
+        <button class="more-btn" type="button" data-list="trackList">Show all</button>
         <div class="dropped" id="trackDropped"></div>
       </section>
       <section class="card">
         <div class="card-head"><h2>Top albums</h2></div>
         <ol id="albumList" class="ranklist bars movers"></ol>
+        <button class="more-btn" type="button" data-list="albumList">Show all</button>
         <div class="dropped" id="albumDropped"></div>
       </section>
     </div>
 
     <section class="card">
-      <div class="card-head"><h2 id="timelineTitle">Scrobbles over time</h2></div>
+      <div class="card-head chart-head">
+        <h2 id="timelineTitle">Scrobbles per month</h2>
+        <div class="chart-tools">
+          <div class="seg seg-neutral" id="timeBy" role="group" aria-label="Group per"
+               title="Year shows all years (ignores the backdrop); month and day follow the backdrop">
+            <button data-by="year">Year</button><button data-by="month">Month</button><button data-by="day">Day</button>
+          </div>
+          <label class="switch" title="Show a running total instead of the amount per period">
+            <input type="checkbox" id="cumulative"> Cumulative
+          </label>
+        </div>
+      </div>
       <div class="chart-box"><canvas id="timelineChart"></canvas></div>
-      <div class="card-head" style="margin-top:22px"><h2 id="yearsTitle">Your top artists per year</h2></div>
+      <div class="card-head chart-head" style="margin-top:22px">
+        <h2 id="yearsTitle">Your top artists per month</h2>
+        <label class="count-field" title="How many artists the chart draws (1-25)">Artists
+          <input type="number" id="artistLines" min="1" max="25" step="1" value="8">
+        </label>
+      </div>
       <div class="chart-box tall"><canvas id="yearsChart"></canvas></div>
     </section>
 
@@ -288,9 +292,9 @@
   </div>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="js/engine.js?v=9"></script>
-  <script src="js/nav.js?v=9"></script>
-  <script src="js/app.js?v=9"></script>
-  <script src="js/race.js?v=9"></script>
+  <script src="js/engine.js?v=10"></script>
+  <script src="js/nav.js?v=10"></script>
+  <script src="js/app.js?v=10"></script>
+  <script src="js/race.js?v=10"></script>
 </body>
 </html>

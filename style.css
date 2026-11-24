@@ -178,6 +178,28 @@ body.side-collapsed .side-collapse svg { transform: rotate(180deg); }
 .ranklist.movers .p b { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
 .ranklist.movers .p .plus { font-size: 12px; margin: 0; }
 .ranklist.movers .mv { min-width: 0; padding: 1px 6px; font-size: 11px; }
+.more-btn { display: none; }
+.chart-head { flex-wrap: wrap; }
+.chart-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.switch { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); cursor: pointer; }
+.switch input { accent-color: var(--accent); width: 16px; height: 16px; }
+.count-field { font-size: 13px; color: var(--muted); }
+.count-field input { width: 64px; padding: 4px 8px; }
+/* Listening grid, vertical version (phone held upright): days across, hours down */
+.clock.vertical { grid-template-columns: 44px repeat(7, minmax(0, 1fr)); max-width: 420px; }
+.clock.vertical .cell { aspect-ratio: auto; height: 16px; }
+.clock.vertical .lab { justify-content: flex-end; padding-right: 6px; font-size: 10px; }
+
+/* Phones: no scrolling inside the lists (it trapped the thumb); 10 rows + "Show all" instead */
+@media (max-width: 700px), (max-height: 500px) and (orientation: landscape) {
+  .ranklist.bars, .ranklist.movers { max-height: none; overflow: visible; }
+  .ranklist.bars:not(.expanded) > li:nth-child(n+11) { display: none; }
+  .more-btn {
+    display: block; width: 100%; margin-top: 8px; padding: 8px; font: inherit; font-weight: 600; font-size: 13px;
+    color: var(--accent); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; cursor: pointer;
+  }
+  .more-btn[hidden] { display: none; }
+}
 
 /* ---------- Bar race page ---------- */
 .race-grid { display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: flex-end; }
@@ -201,7 +223,7 @@ body.side-collapsed .side-collapse svg { transform: rotate(180deg); }
 code.copyable { display: inline-block; padding: 6px 10px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); cursor: pointer; word-break: break-all; }
 
 /* Phones: stack the top bar, smaller header, no sticky filter bar (it would fill the screen) */
-@media (max-width: 700px) {
+@media (max-width: 700px), (max-height: 500px) and (orientation: landscape) {
   /* Phones: header + folded filter panel stay at the top; kept compact so they don't eat the screen */
   .sticky-top { position: sticky; }
   .top { padding: 8px 12px; flex-wrap: nowrap; gap: 8px; }

@@ -86,6 +86,20 @@ function drawChart(id, config) {
   charts[id] = new Chart(document.getElementById(id), config);
 }
 
+// ---------------------------------------------------------------- collapsible groups (Cards, Lists, Graphs, Recent scrobbles)
+// Which groups you closed is remembered on this device.
+let closedGroups = [];
+try { closedGroups = JSON.parse(localStorage.getItem("ss-closed-groups") || "[]"); } catch {}
+$$("details.group").forEach((g) => {
+  if (closedGroups.includes(g.dataset.group)) g.open = false;
+  g.addEventListener("toggle", () => {
+    closedGroups = $$("details.group").filter((x) => !x.open).map((x) => x.dataset.group);
+    try { localStorage.setItem("ss-closed-groups", JSON.stringify(closedGroups)); } catch {}
+    // Charts drawn while hidden have no size; fit them when the group opens again.
+    if (g.open) Object.values(charts).forEach((c) => c.resize());
+  });
+});
+
 // ---------------------------------------------------------------- cards
 const plus = (n) => `<span class="plus${n ? "" : " zero"}">+${fmt(n)}</span>`;
 async function loadStats() {
@@ -94,16 +108,29 @@ async function loadStats() {
   $("#ovTitle").textContent = PERIOD_LABEL[view.b];
   $("#ovHint").innerHTML = `${plus(1).replace("+1", "+N")} = what ${esc(A)} added`;
   $("#listsTitle").textContent = view.b === "all" ? "All-time top" : `Top of ${B}`;
-  const tile = (value, label, added, tip) => `<div class="stat"${tip ? ` title="${esc(tip)}"` : ""}>
-    <div class="v">${value}${added === undefined ? "" : " " + plus(added)}</div><div class="l">${label}</div></div>`;
+  // extra: ready-made HTML after the value (e.g. a +N or a signed change)
+  const tile = (value, label, extra, tip) => `<div class="stat"${tip ? ` title="${esc(tip)}"` : ""}>
+    <div class="v">${value}${extra ? " " + extra : ""}</div><div class="l">${label}</div></div>`;
+  // A change that can go both ways: green +0.4, red −0.4, grey ±0
+  const signed = (n) => (n === null || n === 0 ? '<span class="plus zero">±0</span>'
+    : n > 0 ? `<span class="plus">+${n}</span>` : `<span class="plus minus">−${Math.abs(n)}</span>`);
+  const hNow = s.h_now, hWas = s.h_was;
+  const hPart = (label, k) => `${label} ${hNow[k]}${hNow[k] > hWas[k] ? ` <span class="plus">+${hNow[k] - hWas[k]}</span>` : ""}`;
   $("#stats").innerHTML = [
-    tile(fmt(s.scrobbles.total), "scrobbles", s.scrobbles.added, `${fmt(s.scrobbles.added)} of them ${A}`),
-    tile(fmt(s.artists.total), "artists", s.artists.added, `${fmt(s.artists.added)} artists played ${A} for the first time ${B === "all time" ? "ever" : B}`),
-    tile(fmt(s.songs.total), "different songs", s.songs.added, `${fmt(s.songs.added)} songs new to ${B}`),
-    tile(fmt(s.albums.total), "albums", s.albums.added, `${fmt(s.albums.added)} albums new to ${B}`),
-    tile(s.per_day, `plays per day · ${esc(A)}: ${s.insight_per_day}`),
-    tile(fmt(s.new_songs), `first-time songs ${esc(A)}`, undefined, "Songs you played for the very first time ever"),
-    tile(fmt(s.new_artists), `first-time artists ${esc(A)}`, undefined, "Artists you played for the very first time ever"),
+    tile(fmt(s.scrobbles.total), "scrobbles", plus(s.scrobbles.added), `${fmt(s.scrobbles.added)} of them ${A}`),
+    tile(fmt(s.artists.total), "artists", plus(s.artists.added), `${fmt(s.artists.added)} artists new to ${B}`),
+    tile(fmt(s.songs.total), "different songs", plus(s.songs.added), `${fmt(s.songs.added)} songs new to ${B}`),
+    tile(fmt(s.albums.total), "albums", plus(s.albums.added), `${fmt(s.albums.added)} albums new to ${B}`),
+    tile(s.per_day, `plays per day · ${esc(A)}: ${s.insight_per_day}`, signed(s.per_day_change),
+      `Average per day for ${B}; the change is how ${A} moved that average`),
+    tile(hNow.h_artist, `artist h-index · ${hPart("songs", "h_song")} · ${hPart("albums", "h_album")}`,
+      hNow.h_artist > hWas.h_artist ? plus(hNow.h_artist - hWas.h_artist) : "",
+      `h-index: ${hNow.h_artist} artists with at least ${hNow.h_artist} plays each in ${B}. +N = raised by ${A}.`),
+  ].join("");
+  // First-time discoveries: a separate row, a little apart from the totals
+  $("#stats2").innerHTML = [
+    tile(fmt(s.new_songs), `first-time songs ${esc(A)}`, "", "Songs you played for the very first time ever"),
+    tile(fmt(s.new_artists), `first-time artists ${esc(A)}`, "", "Artists you played for the very first time ever"),
   ].join("");
 }
 
@@ -185,7 +212,7 @@ function renderMovers(listEl, droppedEl, d, kind, title, sub) {
     const subtitle = [sub ? sub(i) : "", i.was !== null && i.was !== i.rank ? `was #${i.was}` : ""].filter(Boolean).join(" · ");
     const tip = `${fmt(i.plays)} plays, ${fmt(i.added)} of them ${A}\nClick to filter, Ctrl+click to add`;
     return `<li value="${i.rank}" class="${picked ? "picked" : ""}" data-id="${esc(i.id)}" data-label="${esc(LABEL_OF[kind](i))}"
-      style="--w:${((100 * i.plays) / max).toFixed(1)}%" title="${esc(tip)}">
+      style="--w:${((100 * i.plays) / max).toFixed(1)}%;--g:${i.plays ? ((100 * i.added) / i.plays).toFixed(1) : 0}%" title="${esc(tip)}">
       <span class="p"><b>${fmt(i.plays)}</b>${i.added ? `<span class="plus">+${fmt(i.added)}</span>` : ""}${moveBadge(i)}</span>
       <span class="t">${esc(title(i))}</span><span class="a">${esc(subtitle)}</span></li>`;
   }).join("") || "<li>No plays in this period.</li>";

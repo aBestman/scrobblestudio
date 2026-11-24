@@ -8,9 +8,9 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=11">
   <!-- Chart.js 4.4.1 (official npm release), stored in this repository so no outside code runs in the app -->
-  <script src="js/chart.umd.min.js?v=10"></script>
+  <script src="js/chart.umd.min.js?v=11"></script>
 </head>
 <body>
   <div class="sticky-top">
@@ -62,12 +62,21 @@
         details and import your <b>Scrobbles.csv</b> (or download your history from Last.fm).</p>
     </section>
 
-    <div class="overview-head">
-      <h2 id="ovTitle">This year</h2>
-      <span class="hint" id="ovHint"></span>
-    </div>
-    <section class="stats" id="stats"></section>
+    <details class="group" data-group="cards" open>
+      <summary class="group-head">Cards</summary>
+      <div class="group-body">
+        <div class="overview-head">
+          <h2 id="ovTitle">This year</h2>
+          <span class="hint" id="ovHint"></span>
+        </div>
+        <section class="stats" id="stats"></section>
+        <section class="stats firsts" id="stats2"></section>
+      </div>
+    </details>
 
+    <details class="group" data-group="lists" open>
+      <summary class="group-head">Lists</summary>
+      <div class="group-body">
     <div class="top-head">
       <h2 id="listsTitle">Top of this year</h2>
       <span class="selection-pill" id="selectionPill" hidden>
@@ -99,7 +108,12 @@
         <div class="dropped" id="albumDropped"></div>
       </section>
     </div>
+      </div>
+    </details>
 
+    <details class="group" data-group="graphs" open>
+      <summary class="group-head">Graphs</summary>
+      <div class="group-body">
     <section class="card">
       <div class="card-head chart-head">
         <h2 id="timelineTitle">Scrobbles per month</h2>
@@ -128,11 +142,15 @@
       <div id="clock" class="clock"></div>
       <p class="hint">Darker = more plays. Hover a square for the number.</p>
     </section>
+      </div>
+    </details>
   </main>
 
   <aside class="card recent">
-    <div class="card-head"><h2>Recent scrobbles</h2><span class="hint" id="recentCount"></span></div>
-    <ol id="recentList" class="recent-list"></ol>
+    <details class="group" data-group="recent" open>
+      <summary class="group-head">Recent scrobbles <span class="hint" id="recentCount"></span></summary>
+      <ol id="recentList" class="recent-list"></ol>
+    </details>
   </aside>
   </div>
   </div>
@@ -292,9 +310,9 @@
   </div>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="js/engine.js?v=10"></script>
-  <script src="js/nav.js?v=10"></script>
-  <script src="js/app.js?v=10"></script>
-  <script src="js/race.js?v=10"></script>
+  <script src="js/engine.js?v=11"></script>
+  <script src="js/nav.js?v=11"></script>
+  <script src="js/app.js?v=11"></script>
+  <script src="js/race.js?v=11"></script>
 </body>
 </html>

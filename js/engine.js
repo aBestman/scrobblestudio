@@ -473,14 +473,21 @@
     const firstDay = chart.length ? (chart[0].ymd > w.bStart ? chart[0].ymd : w.bStart) : today;
     const daysB = Math.max(1, Math.round((Date.parse(today) - Date.parse(firstDay)) / 86400000) + 1);
     const daysA = Math.max(1, Math.round((Date.parse(today) - Date.parse(w.aStart)) / 86400000) + 1);
+    // Average per day before the insight period started (null if the backdrop has no days before it).
+    const daysBefore = Math.round((Date.parse(w.aStart) - Date.parse(firstDay)) / 86400000);
+    const perDay = Math.round((chart.length / daysB) * 10) / 10;
+    const perDayWas = daysBefore > 0 ? Math.round((before.length / daysBefore) * 10) / 10 : null;
     return {
       backdrop: { key: w.bKey, label: PERIOD_NAMES[w.bKey], start: w.bStart },
       insight: { key: w.aKey, label: PERIOD_NAMES[w.aKey], start: w.aStart },
       first: chart[0]?.ymd || null, last: chart[chart.length - 1]?.ymd || null,
       scrobbles: { total: chart.length, added: recent.length },
       artists: count((r) => r.artist), songs: count((r) => r.key), albums: count(albumOf),
-      per_day: Math.round((chart.length / daysB) * 10) / 10,
+      per_day: perDay,
+      per_day_change: perDayWas === null ? null : Math.round((perDay - perDayWas) * 10) / 10,
       insight_per_day: Math.round((recent.length / daysA) * 10) / 10,
+      // h-index of the backdrop with the insight (now) and without it (was)
+      h_now: hOverall(chart), h_was: hOverall(before),
       // Played for the very first time ever during the insight period
       new_songs: new Set(recent.filter((r) => E.firstSong.get(r.key) >= w.aStart).map((r) => r.key)).size,
       new_artists: new Set(recent.filter((r) => E.firstArtist.get(r.artist) >= w.aStart).map((r) => r.artist)).size,

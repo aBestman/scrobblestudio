@@ -178,6 +178,34 @@ body.side-collapsed .side-collapse svg { transform: rotate(180deg); }
 .ranklist.movers .p b { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
 .ranklist.movers .p .plus { font-size: 12px; margin: 0; }
 .ranklist.movers .mv { min-width: 0; padding: 1px 6px; font-size: 11px; }
+/* The green end of each bar = the share the insight added (60 plays with +30 → half green).
+   Medium-dark green at partial strength, so the text on top stays readable. */
+.ranklist.movers li::before {
+  background: linear-gradient(to right,
+    color-mix(in srgb, var(--accent) 12%, transparent) 0 calc(100% - var(--g, 0%)),
+    color-mix(in srgb, #15803d 38%, transparent) calc(100% - var(--g, 0%)) 100%);
+}
+.ranklist.movers li.picked::before {
+  background: linear-gradient(to right,
+    color-mix(in srgb, var(--accent) 28%, transparent) 0 calc(100% - var(--g, 0%)),
+    color-mix(in srgb, #15803d 50%, transparent) calc(100% - var(--g, 0%)) 100%) !important;
+}
+.plus.minus { color: var(--accent); }
+
+/* Collapsible groups on the Scrobbles page */
+details.group > summary.group-head {
+  list-style: none; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+  padding: 6px 2px; border-bottom: 1px solid var(--line);
+}
+details.group > summary.group-head::-webkit-details-marker { display: none; }
+details.group > summary.group-head::before { content: "▾"; font-size: 12px; transition: transform .15s; }
+details.group:not([open]) > summary.group-head::before { transform: rotate(-90deg); }
+details.group > summary.group-head:hover { color: var(--text); }
+details.group > summary .hint { margin: 0 0 0 auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.group-body { display: grid; gap: 16px; padding-top: 14px; min-width: 0; }
+aside.recent details.group > summary.group-head { border-bottom: 0; padding-top: 0; }
+.stats.firsts { margin-top: 6px; }
 .more-btn { display: none; }
 .chart-head { flex-wrap: wrap; }
 .chart-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }

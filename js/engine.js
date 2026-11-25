@@ -625,7 +625,10 @@
       plays.push(c);
       total.push(counts.size);
     }
-    // Rolling year: this song's plays in the 365 days up to each day (also counting plays before the period).
+    // Rolling window (default 12 months = 365 days): this song's plays in the window up to each day
+    // (also counting plays before the period). ?months=1..60 changes the window.
+    const months = intArg(q.get("months"), 12, 1, 60);
+    const windowDays = Math.round((months * 365) / 12);
     const perDay = new Map();
     for (const r of E.rows) if (r.key === key) perDay.set(r.ymd, (perDay.get(r.ymd) || 0) + 1);
     const days = [...perDay.keys()].sort();
@@ -634,10 +637,40 @@
     for (const day of labels) {
       const dn = dayNum(day);
       while (inW < days.length && dayNum(days[inW]) <= dn) sum += perDay.get(days[inW++]);
-      while (outW < inW && dayNum(days[outW]) <= dn - 365) sum -= perDay.get(days[outW++]);
+      while (outW < inW && dayNum(days[outW]) <= dn - windowDays) sum -= perDay.get(days[outW++]);
       rolling.push(sum);
     }
-    return { range, labels, rank, plays, total, rolling };
+    return { range, labels, rank, plays, total, rolling, months };
+  }
+
+  // Song visual test: the song and its neighbours in the ranking (5 above, 4 below) at ~200 moments in time.
+  function songLadder(q) {
+    const key = songOf(q.get("key")).key;
+    const range = ["year", "month"].includes(q.get("range")) ? q.get("range") : "all";
+    const start = range === "all" ? "0000-01-01" : periodStart(range);
+    const rows = E.rows.filter((r) => r.ymd >= start);
+    const firstPlay = rows.find((r) => r.key === key);
+    if (!firstPlay) fail("This song wasn't played in this period.");
+    const labels = periodRange("day", firstPlay.ymd, ymdLocal(new Date()));
+    const F = Math.min(200, labels.length);
+    const sampleDays = Array.from({ length: F }, (_, i) => labels[Math.round((i * (labels.length - 1)) / Math.max(1, F - 1))]);
+    const counts = new Map();
+    const frames = [];
+    let j = 0;
+    for (const day of sampleDays) {
+      while (j < rows.length && rows[j].ymd <= day) { const k = rows[j++].key; counts.set(k, (counts.get(k) || 0) + 1); }
+      const sorted = [...counts].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
+      const at = sorted.findIndex(([k]) => k === key);
+      const rankOf = (idx) => { const n = sorted[idx][1]; let p = idx; while (p > 0 && sorted[p - 1][1] === n) p--; return p + 1; };
+      // 5 above and 4 below; near the top (or bottom) the window shifts so there are always 10 rows.
+      const from = Math.max(0, Math.min(at - 5, sorted.length - 10));
+      const pick = sorted.slice(from, from + 10).map(([k, n], o) => {
+        const s = songIndex.byKey.get(k);
+        return { key: k, track: s.track, artist: s.artist, plays: n, rank: rankOf(from + o), me: k === key };
+      });
+      frames.push({ day, rank: rankOf(at), plays: sorted[at][1], songs: sorted.length, rows: pick });
+    }
+    return { range, frames };
   }
   // ------------------------------------------------------------------ Bar race: values per step for an animated ranking
   const weekCache = new Map();
@@ -1411,6 +1444,7 @@
       case "songsearch": return songSearch(q);
       case "song": return songInfo(q);
       case "songrank": return songRank(q);
+      case "songladder": songs(); return songLadder(q);
       case "recent": return recent(q);
       case "playlist": return playlist(q);
       case "tags": return tags();

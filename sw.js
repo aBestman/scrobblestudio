@@ -2,11 +2,11 @@
 // The app's own files are cached; your data lives in the browser's storage, not here.
 // After changing files: bump VERSION here AND the ?v= number on every script/style link in the HTML pages,
 // so a new page never runs with old (cached) script files.
-const VERSION = "ss-v14";
+const VERSION = "ss-v15";
 const FILES = [
   "./", "index.html", "settings.html", "locations.html", "style.css",
   "js/engine.js", "js/app.js", "js/settings.js", "js/locations.js", "js/chart.umd.min.js",
-  "js/nav.js", "js/race.js", "js/song.js",
+  "js/nav.js", "js/race.js", "js/song.js", "js/songlab.js",
   "manifest.webmanifest", "icon-192.png", "icon-512.png",
 ];
 

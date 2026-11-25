@@ -8,9 +8,9 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=14">
+  <link rel="stylesheet" href="style.css?v=15">
   <!-- Chart.js 4.4.1 (official npm release), stored in this repository so no outside code runs in the app -->
-  <script src="js/chart.umd.min.js?v=14"></script>
+  <script src="js/chart.umd.min.js?v=15"></script>
 </head>
 <body>
   <div class="sticky-top">
@@ -91,19 +91,19 @@
     <div class="grid3">
       <section class="card">
         <div class="card-head"><h2>Top artists</h2></div>
-        <ol id="artistList" class="ranklist bars movers" data-show="50"></ol>
+        <ol id="artistList" class="ranklist bars movers" data-show="10"></ol>
         <div class="list-size" data-list="artistList"></div>
         <div class="dropped" id="artistDropped"></div>
       </section>
       <section class="card">
         <div class="card-head"><h2>Top songs</h2></div>
-        <ol id="trackList" class="ranklist bars movers" data-show="50"></ol>
+        <ol id="trackList" class="ranklist bars movers" data-show="10"></ol>
         <div class="list-size" data-list="trackList"></div>
         <div class="dropped" id="trackDropped"></div>
       </section>
       <section class="card">
         <div class="card-head"><h2>Top albums</h2></div>
-        <ol id="albumList" class="ranklist bars movers" data-show="50"></ol>
+        <ol id="albumList" class="ranklist bars movers" data-show="10"></ol>
         <div class="list-size" data-list="albumList"></div>
         <div class="dropped" id="albumDropped"></div>
       </section>
@@ -350,11 +350,36 @@
     </main>
   </div>
 
+  <!-- ============================================================ Song visual test (temporary) -->
+  <div class="page" data-page="lab" hidden>
+    <main class="page-main">
+      <section class="card lab-controls">
+        <p class="hint" style="margin-top:0">🧪 Temporary test page: compare different ways to show a song's journey. Pick a song, then play each visual with its own controls.</p>
+        <div class="search-wrap">
+          <input type="search" id="labQuery" placeholder="Search a song or artist from your library…" autocomplete="off" aria-label="Search a song">
+          <ul id="labResults" class="suggest" hidden></ul>
+        </div>
+        <div class="lab-opts">
+          <div class="seg seg-neutral" id="labRange" role="group" aria-label="Period">
+            <button data-range="all">All time</button><button data-range="year">This year</button><button data-range="month">This month</button>
+          </div>
+          <label class="count-field" title="How many months the rolling total covers (1-60)">Rolling months
+            <input type="number" id="labMonths" min="1" max="60" step="1" value="12">
+          </label>
+          <span class="hint" id="labSong"></span>
+        </div>
+      </section>
+      <p class="hint" id="labEmpty">Search a song above to start.</p>
+      <div id="labBody" class="song-body" hidden></div>
+    </main>
+  </div>
+
   <div id="toast" class="toast" hidden></div>
-  <script src="js/engine.js?v=14"></script>
-  <script src="js/nav.js?v=14"></script>
-  <script src="js/app.js?v=14"></script>
-  <script src="js/race.js?v=14"></script>
-  <script src="js/song.js?v=14"></script>
+  <script src="js/engine.js?v=15"></script>
+  <script src="js/nav.js?v=15"></script>
+  <script src="js/app.js?v=15"></script>
+  <script src="js/race.js?v=15"></script>
+  <script src="js/song.js?v=15"></script>
+  <script src="js/songlab.js?v=15"></script>
 </body>
 </html>

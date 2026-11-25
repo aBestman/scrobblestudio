@@ -255,8 +255,9 @@ function markListControls() {
 function renderListSize(listEl) {
   const box = document.querySelector(`.list-size[data-list="${listEl.id}"]`);
   const now = Number(listEl.dataset.show), rows = listEl.children.length;
-  // Fold options are always there; a bigger size only when the list actually has more rows than shown now.
-  box.innerHTML = [10, 50, 100].filter((n) => (n < now) || (n > now && rows > now))
+  // Folded (top 10): only "Show top 50". From 50 on: fold options, plus 100 when there are more rows.
+  const options = now === 10 ? [50] : [10, 50, 100].filter((n) => n < now || (n > now && rows > now));
+  box.innerHTML = options.filter((n) => n < now || rows > now)
     .map((n) => `<button type="button" data-show="${n}">${n < now ? "Fold to" : "Show"} top ${n}</button>`).join("");
 }
 $$(".list-size").forEach((box) => box.addEventListener("click", (e) => {
@@ -695,7 +696,7 @@ async function loadPlaylistsPage() {
 }
 
 // ---------------------------------------------------------------- pages (#scrobbles, #trends, #playlists)
-const PAGES = { scrobbles: "", song: "· Song deep dive", race: "· Bar race", playlists: "· Playlist Studio" };
+const PAGES = { scrobbles: "", song: "· Song deep dive", lab: "· Song visual test", race: "· Bar race", playlists: "· Playlist Studio" };
 let currentPage = null;
 
 function pageFromHash() {
@@ -708,6 +709,7 @@ async function refreshPage() {
   if (currentPage === "scrobbles") return loadAll();
   if (currentPage === "race") return window.loadRace?.();
   if (currentPage === "song") return window.loadSong?.();
+  if (currentPage === "lab") return window.loadLab?.();
   if (currentPage === "playlists") return loadPlaylistsPage();
 }
 function showPage() {

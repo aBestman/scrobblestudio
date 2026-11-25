@@ -9,6 +9,18 @@ const css = (name) => getComputedStyle(document.documentElement).getPropertyValu
 const PALETTE = ["#d51007", "#2f6fdf", "#1db954", "#e8a317", "#8e44ad", "#16a3b8", "#e0559a", "#7a7a7a"];
 // api(path, options) comes from engine.js: it answers the old "/api/..." questions inside the browser.
 
+// Clean play / pause / restart icons for the players (Bar race, Song deep dive).
+const ICONS = {
+  play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="13.5" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>',
+  restart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+function setPlayIcon(btn, playing) {
+  btn.innerHTML = playing ? ICONS.pause : ICONS.play;
+  btn.setAttribute("aria-label", playing ? "Pause" : "Play");
+  btn.title = playing ? "Pause" : "Play";
+}
+
 function toast(text, ms = 4000) {
   const t = $("#toast");
   t.textContent = text;
@@ -216,9 +228,7 @@ function renderMovers(listEl, droppedEl, d, kind, title, sub) {
       <span class="p"><b>${fmt(i.plays)}</b>${i.added ? `<span class="plus">+${fmt(i.added)}</span>` : ""}${moveBadge(i)}</span>
       <span class="t">${esc(title(i))}</span><span class="a">${esc(subtitle)}</span></li>`;
   }).join("") || "<li>No plays in this period.</li>";
-  const more = document.querySelector(`.more-btn[data-list="${listEl.id}"]`);
-  more.hidden = items.length <= 10;
-  more.textContent = listEl.classList.contains("expanded") ? "Show top 10" : `Show all ${items.length}`;
+  renderListSize(listEl);
   droppedEl.innerHTML = d.dropped.length
     ? `<span class="hint">Pushed out of the top ${d.n} by ${esc(A)}:</span> ` +
       d.dropped.map((i) => `<span class="drop">${esc(title(i))} <span class="hint">#${i.was} → #${i.rank}</span></span>`).join(", ")
@@ -241,12 +251,22 @@ const loadLists = () => Promise.all([loadTopArtists(), loadTopTracks(), loadTopA
 function markListControls() {
   $$("#listSort button").forEach((b) => b.classList.toggle("active", b.dataset.sort === listSort));
 }
-// Phones: lists don't scroll inside themselves (that trapped your thumb); they show 10 rows and open fully here.
-$$(".more-btn").forEach((b) => b.addEventListener("click", () => {
-  const list = document.getElementById(b.dataset.list);
-  const open = list.classList.toggle("expanded");
-  b.textContent = open ? "Show top 10" : `Show all ${list.children.length}`;
-  if (!open) list.closest(".card").scrollIntoView({ block: "start", behavior: "smooth" });
+// Each list shows its top 50 first; two buttons switch to the other sizes (10 or 100).
+function renderListSize(listEl) {
+  const box = document.querySelector(`.list-size[data-list="${listEl.id}"]`);
+  const now = Number(listEl.dataset.show), rows = listEl.children.length;
+  // Fold options are always there; a bigger size only when the list actually has more rows than shown now.
+  box.innerHTML = [10, 50, 100].filter((n) => (n < now) || (n > now && rows > now))
+    .map((n) => `<button type="button" data-show="${n}">${n < now ? "Fold to" : "Show"} top ${n}</button>`).join("");
+}
+$$(".list-size").forEach((box) => box.addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-show]");
+  if (!b) return;
+  const list = document.getElementById(box.dataset.list);
+  const folding = Number(b.dataset.show) < Number(list.dataset.show);
+  list.dataset.show = b.dataset.show;
+  renderListSize(list);
+  if (folding) list.closest(".card").scrollIntoView({ block: "nearest", behavior: "smooth" });
 }));
 $$("#listSort button").forEach((b) => b.addEventListener("click", () => {
   listSort = b.dataset.sort;
@@ -291,10 +311,15 @@ function showSelection() {
 [["artist", "#artistList"], ["track", "#trackList"], ["album", "#albumList"]].forEach(([kind, sel]) =>
   $(sel).addEventListener("click", (e) => {
     const li = e.target.closest("li[data-id]");
-    if (li) select(kind, li.dataset.id, li.dataset.label, e.ctrlKey || e.metaKey);
+    if (!li) return;
+    if (kind === "track" && !(e.ctrlKey || e.metaKey)) { openSong(li.dataset.id); return; }
+    select(kind, li.dataset.id, li.dataset.label, e.ctrlKey || e.metaKey);
   })
 );
 $("#selectionClear").addEventListener("click", clearSelection);
+// Song deep dive: the song's key goes in the address, e.g. #song=muse%1Fuprising
+const songKey = (artist, track) => artist.trim().toLowerCase() + "\x1f" + track.trim().toLowerCase();
+function openSong(key) { location.hash = "#song=" + encodeURIComponent(key); }
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !e.target.closest?.("input, select, textarea")) clearSelection();
 });
@@ -341,8 +366,9 @@ portraitPhone.addEventListener("change", renderClock);
 // How many artists (lines) to show: 1-25, remembered between visits.
 function artistLines() {
   const el = $("#artistLines");
+  if (el.value.trim() === "") return 8;                 // empty while typing: draw 8, but leave the field empty
   const n = Math.min(25, Math.max(1, Math.round(Number(el.value) || 8)));
-  el.value = n;
+  if (String(n) !== el.value) el.value = n;
   return n;
 }
 try { const saved = localStorage.getItem("artistLines"); if (saved) $("#artistLines").value = saved; } catch {}
@@ -350,7 +376,7 @@ let linesTimer;
 $("#artistLines").addEventListener("input", () => {
   clearTimeout(linesTimer);
   linesTimer = setTimeout(() => {
-    try { localStorage.setItem("artistLines", artistLines()); } catch {}
+    if ($("#artistLines").value.trim() !== "") { try { localStorage.setItem("artistLines", artistLines()); } catch {} }
     loadYears();
   }, 400);
 });
@@ -401,10 +427,11 @@ async function loadRecent() {
       html += `<li class="day">${esc(label)}</li>`;
       lastDay = day;
     }
-    html += `<li title="${esc(i.album)}"><span class="w" style="float:right">${esc(i.time.slice(11))}</span>
+    html += `<li class="link" data-key="${esc(songKey(i.artist, i.track))}" title="${esc(i.album)} · click for the song's deep dive"><span class="w" style="float:right">${esc(i.time.slice(11))}</span>
       <span class="t">${esc(i.track)}</span><span class="a">${esc(i.artist)}</span></li>`;
   }
   $("#recentList").innerHTML = html || "<li>No scrobbles yet.</li>";
+  $$("#recentList li[data-key]").forEach((li) => li.addEventListener("click", () => openSong(li.dataset.key)));
   $("#recentCount").textContent = items.length ? `last ${items.length}` : "";
 }
 
@@ -668,11 +695,11 @@ async function loadPlaylistsPage() {
 }
 
 // ---------------------------------------------------------------- pages (#scrobbles, #trends, #playlists)
-const PAGES = { scrobbles: "", race: "· Bar race", playlists: "· Playlist Studio" };
+const PAGES = { scrobbles: "", song: "· Song deep dive", race: "· Bar race", playlists: "· Playlist Studio" };
 let currentPage = null;
 
 function pageFromHash() {
-  const p = location.hash.slice(1);
+  const p = location.hash.slice(1).split("=")[0];          // "#song=<key>" -> "song"
   if (p === "trends") return "scrobbles";               // Trends was merged into Scrobbles
   return p in PAGES ? p : "scrobbles";
 }
@@ -680,6 +707,7 @@ async function refreshPage() {
   api("/api/data/info").then((i) => ($("#welcome").hidden = i.scrobbles > 0)).catch(() => {});
   if (currentPage === "scrobbles") return loadAll();
   if (currentPage === "race") return window.loadRace?.();
+  if (currentPage === "song") return window.loadSong?.();
   if (currentPage === "playlists") return loadPlaylistsPage();
 }
 function showPage() {
@@ -705,3 +733,7 @@ window.addEventListener("hashchange", showPage);
 
 // Offline support / "install as app" (only works when served over https or 127.0.0.1).
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+
+// Collapsible group headers stick just below the top bar; keep its (changing) height in --stick.
+new ResizeObserver(([e]) => document.documentElement.style.setProperty("--stick", e.target.offsetHeight + "px"))
+  .observe(document.querySelector(".sticky-top"));

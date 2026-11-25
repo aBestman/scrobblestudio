@@ -189,8 +189,11 @@ function drawRace(dt) {
 
 // ---------------------------------------------------------------- playing
 function setPlayButton() {
-  $("#racePlay").textContent = race.playing ? "⏸ Pause" : race.t >= race.duration ? "▶ Replay" : "▶ Play";
+  setPlayIcon($("#racePlay"), race.playing);           // clean play / pause icon (app.js)
 }
+$("#raceRestart").innerHTML = ICONS.restart;
+$("#raceRestart").title = "Restart";
+setPlayButton();
 function tickRace(now) {
   const dt = race.last ? now - race.last : 16;
   race.last = now;

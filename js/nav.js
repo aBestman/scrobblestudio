@@ -5,6 +5,7 @@
     scrobbles: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
     trends: '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
     race: '<path d="M3 5h14M3 10h18M3 15h10M3 20h6"/>',
+    song: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/><path d="M10 13.5V8.5l3-.8"/>',
     playlists: '<path d="M3 6h12M3 12h12M3 18h7"/><path d="M17 18V8l4-1"/><circle cx="15" cy="18" r="2"/>',
     weather: '<path d="M7 18a4 4 0 0 1-.5-8A5.5 5.5 0 0 1 17 9a4 4 0 0 1 0 9z"/><path d="M8 21l1-2M12 21l1-2M16 21l1-2"/>',
     settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
@@ -14,6 +15,7 @@
   const onIndex = !/(settings|locations)\.html$/.test(location.pathname);
   const ITEMS = [
     ["scrobbles", "Scrobbles", onIndex ? "#scrobbles" : "./#scrobbles"],
+    ["song", "Song deep dive", onIndex ? "#song" : "./#song"],
     ["race", "Bar race", onIndex ? "#race" : "./#race"],
     ["playlists", "Playlist Studio", onIndex ? "#playlists" : "./#playlists"],
     null,
@@ -62,7 +64,7 @@
   function mark() {
     const page = /locations\.html$/.test(location.pathname) ? "weather"
       : /settings\.html$/.test(location.pathname) ? "settings"
-      : (location.hash.slice(1).replace("trends", "scrobbles") || "scrobbles");
+      : (location.hash.slice(1).split("=")[0].replace("trends", "scrobbles") || "scrobbles");
     nav.querySelectorAll(".side-link[data-page]").forEach((a) => a.classList.toggle("active", a.dataset.page === page));
   }
   window.addEventListener("hashchange", mark);

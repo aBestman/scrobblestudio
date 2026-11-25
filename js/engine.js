@@ -520,6 +520,113 @@
     };
   }
 
+  // ------------------------------------------------------------------ Song deep dive
+  let songIndex = null;                                   // key -> { key, track, artist, plays }, rebuilt when data changes
+  function songs() {
+    if (songIndex && songIndex.rows === E.rows) return songIndex.list;
+    const m = new Map();
+    for (const r of E.rows) {
+      let s = m.get(r.key);
+      if (!s) m.set(r.key, (s = { key: r.key, track: r.track, artist: r.artist, plays: 0 }));
+      s.plays++;
+    }
+    const list = [...m.values()].sort((a, b) => b.plays - a.plays);
+    songIndex = { rows: E.rows, list, byKey: m };
+    return list;
+  }
+  const songOf = (key) => { songs(); return songIndex.byKey.get(key) || fail("That song isn't in your scrobbles."); };
+
+  // Search: every word must appear in the title or artist; most played first.
+  function songSearch(q) {
+    const words = (q.get("q") || "").toLowerCase().split(/\s+/).filter(Boolean);
+    const limit = intArg(q.get("limit"), 12, 1, 50);
+    if (!words.length) return { items: songs().slice(0, limit) };
+    const items = [];
+    for (const s of songs()) {
+      const hay = (s.track + " " + s.artist).toLowerCase();
+      if (words.every((w) => hay.includes(w))) { items.push(s); if (items.length >= limit) break; }
+    }
+    return { items };
+  }
+
+  const dayNum = (ymd) => Math.round(Date.parse(ymd + "T00:00:00Z") / 86400000);
+
+  function songInfo(q) {
+    const s = songOf(q.get("key"));
+    const idx = [];                                        // positions of this song's scrobbles in E.rows
+    E.rows.forEach((r, i) => { if (r.key === s.key) idx.push(i); });
+    const plays = idx.map((i) => E.rows[i]);
+    const days = [...new Set(plays.map((r) => r.ymd))];   // already in time order
+    const today = ymdLocal(new Date());
+    // Longest stretch of days without a play: between listening days, and from the last one until today.
+    let gap = { days: 0, from: null, to: null, ongoing: false };
+    for (let i = 1; i <= days.length; i++) {
+      const a = days[i - 1], b = i < days.length ? days[i] : today;
+      const d = dayNum(b) - dayNum(a) - (i < days.length ? 1 : 0);
+      if (d > gap.days) gap = { days: d, from: addDaysUTC(a, 1), to: i < days.length ? addDaysUTC(b, -1) : today, ongoing: i === days.length };
+    }
+    const first = plays[0], last = plays[plays.length - 1];
+
+    // Played together: for each scrobble, the top 3 other songs within ±2 days; then the songs
+    // that most often make that top 3. Two pointers keep a running count of the ±2-day window.
+    const W = 2 * 86400, win = new Map(), tally = new Map();
+    let lo = 0, hi = 0;
+    for (const i of idx) {
+      const t = E.rows[i].uts;
+      while (hi < E.rows.length && E.rows[hi].uts <= t + W) { const k = E.rows[hi++].key; win.set(k, (win.get(k) || 0) + 1); }
+      while (E.rows[lo].uts < t - W) { const k = E.rows[lo++].key; const n = win.get(k) - 1; if (n) win.set(k, n); else win.delete(k); }
+      const top3 = [...win].filter(([k]) => k !== s.key).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, 3);
+      for (const [k, n] of top3) {
+        const e = tally.get(k) || { times: 0, plays: 0 };
+        e.times++; e.plays += n;
+        tally.set(k, e);
+      }
+    }
+    const together = [...tally].sort((a, b) => b[1].times - a[1].times || b[1].plays - a[1].plays).slice(0, 5)
+      .map(([k, e]) => ({ ...songOf(k), times: e.times, of: idx.length }));
+
+    const fmtTime = (r) => `${r.ymd} ${pad(r.hh)}:${pad(r.mi)}`;
+    return {
+      key: s.key, track: s.track, artist: s.artist, album: last.album,
+      scrobbles: plays.length, first: fmtTime(first), last: fmtTime(last),
+      days: days.length, gap, together,
+      rank_all: rankMap(new Map(songs().map((x) => [x.key, x.plays]))).ranks.get(s.key), songs_total: songs().length,
+    };
+  }
+
+  // The song's position among all your songs over time (cumulative plays since the period started),
+  // one value per day. Keeps a "how many songs are ahead" counter so it stays fast over 16 years.
+  function songRank(q) {
+    const key = songOf(q.get("key")).key;
+    const range = ["year", "month"].includes(q.get("range")) ? q.get("range") : "all";
+    const start = range === "all" ? "0000-01-01" : periodStart(range);
+    const rows = E.rows.filter((r) => r.ymd >= start);
+    if (!rows.length) fail("No scrobbles in this period.");
+    const today = ymdLocal(new Date());
+    // The timeline starts at the song's first play in this period (all songs are still counted from the start).
+    const firstPlay = rows.find((r) => r.key === key);
+    if (!firstPlay) fail("This song wasn't played in this period.");
+    const labels = periodRange("day", firstPlay.ymd, today);
+    const counts = new Map(), freq = new Map();   // freq: how many songs have exactly n plays
+    let c = 0, ahead = 0, j = 0;
+    const rank = [], plays = [], total = [];
+    const add = (k) => {
+      const old = counts.get(k) || 0, now = old + 1;
+      if (k === key) { ahead -= freq.get(now) || 0; c = now; }        // songs it catches up with are no longer ahead
+      else if (old === c) ahead++;                                     // a song passes it
+      if (old) freq.set(old, freq.get(old) - 1);
+      freq.set(now, (freq.get(now) || 0) + 1);
+      counts.set(k, now);
+    };
+    while (j < rows.length && rows[j].ymd < firstPlay.ymd) add(rows[j++].key);   // everything before the first play
+    for (const day of labels) {
+      while (j < rows.length && rows[j].ymd === day) add(rows[j++].key);
+      rank.push(c ? ahead + 1 : null);
+      plays.push(c);
+      total.push(counts.size);
+    }
+    return { range, labels, rank, plays, total };
+  }
   // ------------------------------------------------------------------ Bar race: values per step for an animated ranking
   const weekCache = new Map();
   function weekOf(ymd) {                                       // Monday of that week, as YYYY-MM-DD
@@ -1289,6 +1396,9 @@
       case "barrace": return barRace(q);
       case "overview": return overview(q);
       case "movers": return movers(q);
+      case "songsearch": return songSearch(q);
+      case "song": return songInfo(q);
+      case "songrank": return songRank(q);
       case "recent": return recent(q);
       case "playlist": return playlist(q);
       case "tags": return tags();

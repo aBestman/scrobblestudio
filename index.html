@@ -8,9 +8,9 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=11">
+  <link rel="stylesheet" href="style.css?v=12">
   <!-- Chart.js 4.4.1 (official npm release), stored in this repository so no outside code runs in the app -->
-  <script src="js/chart.umd.min.js?v=11"></script>
+  <script src="js/chart.umd.min.js?v=12"></script>
 </head>
 <body>
   <div class="sticky-top">
@@ -91,20 +91,20 @@
     <div class="grid3">
       <section class="card">
         <div class="card-head"><h2>Top artists</h2></div>
-        <ol id="artistList" class="ranklist bars movers"></ol>
-        <button class="more-btn" type="button" data-list="artistList">Show all</button>
+        <ol id="artistList" class="ranklist bars movers" data-show="50"></ol>
+        <div class="list-size" data-list="artistList"></div>
         <div class="dropped" id="artistDropped"></div>
       </section>
       <section class="card">
         <div class="card-head"><h2>Top songs</h2></div>
-        <ol id="trackList" class="ranklist bars movers"></ol>
-        <button class="more-btn" type="button" data-list="trackList">Show all</button>
+        <ol id="trackList" class="ranklist bars movers" data-show="50"></ol>
+        <div class="list-size" data-list="trackList"></div>
         <div class="dropped" id="trackDropped"></div>
       </section>
       <section class="card">
         <div class="card-head"><h2>Top albums</h2></div>
-        <ol id="albumList" class="ranklist bars movers"></ol>
-        <button class="more-btn" type="button" data-list="albumList">Show all</button>
+        <ol id="albumList" class="ranklist bars movers" data-show="50"></ol>
+        <div class="list-size" data-list="albumList"></div>
         <div class="dropped" id="albumDropped"></div>
       </section>
     </div>
@@ -299,20 +299,62 @@
 
       <section class="card race-stage">
         <canvas id="raceCanvas" aria-label="Animated bar chart race"></canvas>
-        <div class="race-controls">
-          <button class="btn" id="racePlay" aria-label="Play">▶ Play</button>
-          <button class="btn ghost" id="raceRestart" aria-label="Restart">⟲</button>
-          <input type="range" id="raceScrub" min="0" max="1000" value="0" aria-label="Position in the race">
-          <button class="btn grey" id="raceRecord" title="Play the whole race once and save it as a video file">● Record video</button>
+        <div class="player">
+          <input type="range" class="scrub" id="raceScrub" min="0" max="1000" value="0" aria-label="Position in the race">
+          <div class="player-controls">
+            <button class="icon-btn" id="racePlay" type="button" aria-label="Play"></button>
+            <button class="icon-btn ghost" id="raceRestart" type="button" aria-label="Restart"></button>
+            <span style="flex:1"></span>
+            <button class="btn grey" id="raceRecord" title="Play the whole race once and save it as a video file">● Record video</button>
+          </div>
         </div>
       </section>
     </main>
   </div>
 
+  <!-- ============================================================ Song deep dive -->
+  <div class="page" data-page="song" hidden>
+    <main class="page-main">
+      <section class="card song-search">
+        <div class="search-wrap">
+          <input type="search" id="songQuery" placeholder="Search a song or artist from your library…" autocomplete="off" aria-label="Search a song">
+          <ul id="songResults" class="suggest" hidden></ul>
+        </div>
+      </section>
+      <section class="card hint" id="songEmpty">Search a song above, or click a song in the Top songs list on the Scrobbles page.</section>
+      <div id="songBody" class="song-body" hidden>
+        <div class="song-head"><h2 id="songTitle"></h2><span class="hint" id="songSub"></span></div>
+        <section class="stats" id="songStats"></section>
+        <section class="card">
+          <div class="card-head chart-head">
+            <h2>Position among all your songs</h2>
+            <div class="seg seg-neutral" id="songRange" role="group" aria-label="Period">
+              <button data-range="all">All time</button><button data-range="year">This year</button><button data-range="month">This month</button>
+            </div>
+          </div>
+          <canvas id="songCanvas" aria-label="The song's rank over time"></canvas>
+          <div class="player">
+            <input type="range" class="scrub" id="songScrub" min="0" max="1000" value="1000" aria-label="Position in time">
+            <div class="player-controls">
+              <button class="icon-btn" id="songPlay" type="button" aria-label="Play"></button>
+              <button class="icon-btn ghost" id="songRestart" type="button" aria-label="Restart"></button>
+            </div>
+          </div>
+        </section>
+        <section class="card">
+          <div class="card-head"><h2>Played together</h2></div>
+          <p class="hint">For every play of this song: the 3 songs you played most within 2 days before or after. These 5 made that top 3 most often.</p>
+          <ol id="songTogether" class="ranklist together"></ol>
+        </section>
+      </div>
+    </main>
+  </div>
+
   <div id="toast" class="toast" hidden></div>
-  <script src="js/engine.js?v=11"></script>
-  <script src="js/nav.js?v=11"></script>
-  <script src="js/app.js?v=11"></script>
-  <script src="js/race.js?v=11"></script>
+  <script src="js/engine.js?v=12"></script>
+  <script src="js/nav.js?v=12"></script>
+  <script src="js/app.js?v=12"></script>
+  <script src="js/race.js?v=12"></script>
+  <script src="js/song.js?v=12"></script>
 </body>
 </html>

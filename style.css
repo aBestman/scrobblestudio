@@ -206,7 +206,6 @@ details.group > summary .hint { margin: 0 0 0 auto; text-transform: none; letter
 .group-body { display: grid; gap: 16px; padding-top: 14px; min-width: 0; }
 aside.recent details.group > summary.group-head { border-bottom: 0; padding-top: 0; }
 .stats.firsts { margin-top: 6px; }
-.more-btn { display: none; }
 .chart-head { flex-wrap: wrap; }
 .chart-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .switch { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); cursor: pointer; }
@@ -218,16 +217,50 @@ aside.recent details.group > summary.group-head { border-bottom: 0; padding-top:
 .clock.vertical .cell { aspect-ratio: auto; height: 16px; }
 .clock.vertical .lab { justify-content: flex-end; padding-right: 6px; font-size: 10px; }
 
-/* Phones: no scrolling inside the lists (it trapped the thumb); 10 rows + "Show all" instead */
+/* Lists: top 50 by default; buttons switch to 10 or 100 */
+.ranklist[data-show="10"] > li:nth-child(n+11), .ranklist[data-show="50"] > li:nth-child(n+51) { display: none; }
+.list-size { display: flex; gap: 8px; margin-top: 8px; }
+.list-size:empty { display: none; }
+.list-size button {
+  flex: 1; padding: 7px 8px; font: inherit; font-weight: 600; font-size: 13px; cursor: pointer;
+  color: var(--accent); background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+}
+.list-size button:hover { border-color: var(--accent); }
+/* Phones: no scrolling inside the lists (it trapped the thumb); they grow with the page instead */
 @media (max-width: 700px), (max-height: 500px) and (orientation: landscape) {
   .ranklist.bars, .ranklist.movers { max-height: none; overflow: visible; }
-  .ranklist.bars:not(.expanded) > li:nth-child(n+11) { display: none; }
-  .more-btn {
-    display: block; width: 100%; margin-top: 8px; padding: 8px; font: inherit; font-weight: 600; font-size: 13px;
-    color: var(--accent); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; cursor: pointer;
-  }
-  .more-btn[hidden] { display: none; }
 }
+
+/* Group headers (Cards, Lists, Graphs) stay visible just below the top bar while you scroll */
+main details.group > summary.group-head { position: sticky; top: var(--stick, 0px); z-index: 4; background: var(--bg); }
+
+/* Shared player (Bar race, Song deep dive): full-width slider, buttons on their own row */
+.player { margin-top: 10px; }
+.player .scrub { display: block; width: 100%; margin: 0; accent-color: var(--accent); height: 22px; cursor: pointer; }
+.player-controls { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; padding: 0;
+  border-radius: 999px; border: 0; background: var(--accent); color: #fff; cursor: pointer;
+}
+.icon-btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); width: 38px; height: 38px; }
+.icon-btn svg { width: 20px; height: 20px; }
+.player button:disabled, .player input:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Song deep dive */
+.search-wrap { position: relative; }
+.search-wrap input { width: 100%; font-size: 16px; padding: 10px 12px; }
+.search-wrap .suggest { top: 46px; right: 0; max-height: 360px; overflow: auto; }
+.song-body { display: grid; gap: 16px; }
+.song-head h2 { font-size: 24px; }
+.song-head .hint { display: block; margin-top: 2px; }
+#songCanvas { display: block; width: 100%; height: 320px; border-radius: 10px; }
+.v-date { font-size: 20px; }
+.v-unit { font-size: 15px; font-weight: 500; color: var(--muted); }
+.ranklist.together li { padding: 7px 0; }
+.ranklist.together .p { color: var(--accent); font-weight: 700; }
+.ranklist.together .t, .ranklist.together .a { display: block; }
+li.link { cursor: pointer; }
+li.link:hover .t { color: var(--accent); }
 
 /* ---------- Bar race page ---------- */
 .race-grid { display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: flex-end; }
@@ -236,9 +269,6 @@ aside.recent details.group > summary.group-head { border-bottom: 0; padding-top:
 .race-form .hint { margin-top: 12px; }
 .race-stage { padding: 12px; }
 #raceCanvas { display: block; width: 100%; height: 480px; border-radius: 10px; }
-.race-controls { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
-.race-controls input[type="range"] { flex: 1; min-width: 160px; accent-color: var(--accent); }
-.race-controls .btn:disabled, .race-controls input:disabled { opacity: .5; cursor: not-allowed; }
 
 /* Browser version: welcome card, settings page */
 .welcome { border-color: var(--accent); }

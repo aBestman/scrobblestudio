@@ -42,8 +42,9 @@ window.loadSong = async () => {
   $("#songEmpty").hidden = !!key;
   $("#songBody").hidden = !key;
   if (!key) { setTimeout(() => $("#songQuery").focus(), 50); return; }
-  if (key === sd.key && sd.info) { drawSong(); return; }
+  if (key === sd.key && sd.info) { drawSong(); drawRingsCard(); return; }
   pauseSong();
+  pauseRings();
   try {
     sd.info = await api("/api/song?" + new URLSearchParams({ key }));
   } catch (e) {
@@ -55,6 +56,7 @@ window.loadSong = async () => {
   sd.key = key;
   try { localStorage.setItem("ss-song", key); } catch {}
   renderSongInfo();
+  loadRings();
   await loadSongRank();
 };
 
@@ -240,5 +242,160 @@ $("#songRestart").addEventListener("click", () => { sd.t = 0; playSong(); });
 $("#songScrub").addEventListener("input", (e) => { sd.dragging = true; pauseSong(); sd.t = Number(e.target.value) / 1000; drawSong(); });
 $("#songScrub").addEventListener("change", () => (sd.dragging = false));
 setPlayIcon($("#songPlay"), false);
-window.addEventListener("resize", () => { if (!$("#songBody").hidden) drawSong(); });
-window.addEventListener("hashchange", () => { if (!location.hash.startsWith("#song")) pauseSong(); });
+window.addEventListener("resize", () => { if (!$("#songBody").hidden) { drawSong(); drawRingsCard(); } });
+window.addEventListener("hashchange", () => { if (!location.hash.startsWith("#song")) { pauseSong(); pauseRings(); } });
+
+// ---------------------------------------------------------------- year rings
+// One ring per year around the calendar; distance from the centre = plays in a window around that date.
+const rg = { data: null, half: 1, t: 1, playing: false, last: 0, raf: 0, dragging: false };
+const RING_MS = 14000;
+
+// Read the "months before and after" field. Empty or nonsense → 1, without rewriting what you typed.
+function ringHalf() {
+  const n = parseInt($("#ringHalf").value, 10);
+  return Number.isFinite(n) ? Math.min(12, Math.max(0, n)) : 1;
+}
+async function loadRings() {
+  pauseRings();
+  rg.half = ringHalf();
+  try {
+    rg.data = await api("/api/songrings?" + new URLSearchParams({ key: sd.key, half: rg.half }));
+  } catch (e) {
+    rg.data = null;
+    toast(e.message, 6000);
+  }
+  rg.t = 1;                                              // start on the full picture (with the fill); press play to watch
+  drawRingsCard();
+}
+let ringTimer;
+$("#ringHalf").addEventListener("input", () => {
+  clearTimeout(ringTimer);
+  ringTimer = setTimeout(() => { if (sd.key && ringHalf() !== rg.half) loadRings(); }, 300);
+});
+
+// Draws year rings for days `labels` with values `values` at player time t (0..1) on `canvas`.
+// Shared with the test page. caption(ymd, value) gives the red line under the big number.
+function drawYearRings(canvas, labels, values, t, caption) {
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth || 800, narrow = W < 600;
+  const top = narrow ? 70 : 60, H = Math.min(W, narrow ? 380 : 470) + top;
+  if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); canvas.style.height = H + "px";
+  }
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const ink = css("--text"), muted = css("--muted"), line = css("--line"), accent = css("--accent");
+  ctx.fillStyle = css("--card"); ctx.fillRect(0, 0, W, H);
+  if (!labels || !labels.length) return;
+  const FONT = "Segoe UI, system-ui, sans-serif";
+  const size = H - top - 10, cx = W / 2, cy = top + size / 2;
+  const r0 = size * 0.08, R = size / 2 - 22;
+  const maxV = Math.max(1, ...values);
+  const step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000].find((s) => maxV / s <= 5) || 2000;
+  const topV = Math.ceil(maxV / step) * step;
+  const rad = (val) => r0 + (val / topV) * (R - r0);
+  const ang = (ymd) => {                                  // January at the top, clockwise
+    const d = (Date.parse(ymd + "T00:00:00Z") - Date.UTC(Number(ymd.slice(0, 4)), 0, 1)) / 86400000;
+    return (d / 365.25) * Math.PI * 2 - Math.PI / 2;
+  };
+  const pt = (k) => [cx + Math.cos(ang(labels[k])) * rad(values[k]), cy + Math.sin(ang(labels[k])) * rad(values[k])];
+
+  // Guide circles (plays) and month spokes
+  ctx.lineWidth = 1; ctx.font = `10px ${FONT}`; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  for (let val = step; val <= topV; val += step) {
+    ctx.strokeStyle = line; ctx.beginPath(); ctx.arc(cx, cy, rad(val), 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = muted; ctx.fillText(fmt(val), cx + 3, cy - rad(val) + 6);
+  }
+  ctx.textAlign = "center";
+  MON3S.forEach((m, k) => {
+    const a = (k / 12) * Math.PI * 2 - Math.PI / 2;
+    ctx.strokeStyle = line; ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); ctx.stroke();
+    ctx.fillStyle = muted; ctx.fillText(m, cx + Math.cos(a + 0.26) * (R + 12), cy + Math.sin(a + 0.26) * (R + 12));
+  });
+
+  // Split the days into years (index ranges)
+  const N = labels.length, f = t * (N - 1), i = Math.floor(f), k = Math.round(f);
+  const years = [];
+  for (let n = 0; n <= i; n++) {
+    const yr = Number(labels[n].slice(0, 4));
+    if (!years.length || years.at(-1).yr !== yr) years.push({ yr, from: n, to: n });
+    else years.at(-1).to = n;
+  }
+  const curYear = years.at(-1).yr, span = Math.max(1, curYear - years[0].yr);
+
+  // Finished: fill each year's ring very lightly. Fills stack, so where many years overlap it gets darker.
+  if (t >= 1) {
+    ctx.fillStyle = accent;
+    ctx.globalAlpha = Math.max(0.05, Math.min(0.12, 0.5 / years.length));
+    for (const y of years) {
+      ctx.beginPath();                                    // the ring, then back along the inner circle: the centre stays clear
+      for (let n = y.from; n <= y.to; n++) (n === y.from ? ctx.moveTo : ctx.lineTo).apply(ctx, pt(n));
+      ctx.arc(cx, cy, r0, ang(labels[y.to]), ang(labels[y.from]), true);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // The rings: older years pale and thin, the current year dark
+  ctx.strokeStyle = accent; ctx.lineJoin = "round"; ctx.lineCap = "round";
+  for (const y of years) {
+    const age = curYear - y.yr;
+    ctx.globalAlpha = age === 0 ? 1 : 0.12 + 0.6 * (1 - age / (span + 1));
+    ctx.lineWidth = age === 0 ? 2.6 : 1.4;
+    ctx.beginPath();
+    for (let n = y.from; n <= y.to; n++) (n === y.from ? ctx.moveTo : ctx.lineTo).apply(ctx, pt(n));
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = accent; ctx.beginPath(); ctx.arc(...pt(k), 5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = muted; ctx.font = `700 ${narrow ? 14 : 16}px ${FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(String(Number(labels[k].slice(0, 4))), cx, cy);
+
+  // Header
+  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+  const big = `${fmt(values[k])} plays`;
+  ctx.fillStyle = ink; ctx.font = `700 ${narrow ? 24 : 30}px ${FONT}`;
+  ctx.fillText(big, 12, narrow ? 30 : 34);
+  const w = ctx.measureText(big).width;
+  ctx.font = `600 ${narrow ? 12 : 14}px ${FONT}`; ctx.fillStyle = accent;
+  ctx.fillText(caption(labels[k], values[k]), narrow ? 12 : 24 + w, narrow ? 48 : 34);
+  ctx.font = `12px ${FONT}`; ctx.fillStyle = muted;
+  ctx.fillText(`${niceDate(labels[k])} · one ring per year, distance = plays`, 12, narrow ? 64 : 54);
+}
+
+function drawRingsCard() {
+  const d = rg.data;
+  const word = (m) => `${m} month${m === 1 ? "" : "s"}`;
+  drawYearRings($("#ringCanvas"), d && d.labels, d ? d.values : [], rg.t,
+    () => (d.half === 0 ? "in that month" : `in the ${word(d.months)} around it (${word(d.half)} before and after)`));
+  if (!rg.dragging) $("#ringScrub").value = Math.round(rg.t * 1000);
+}
+function tickRings(now) {
+  const dt = rg.last ? now - rg.last : 16;
+  rg.last = now;
+  rg.t = Math.min(1, rg.t + dt / RING_MS);
+  drawRingsCard();
+  if (rg.t >= 1) { pauseRings(); return; }
+  rg.raf = requestAnimationFrame(tickRings);
+}
+function playRings() {
+  if (!rg.data) return;
+  if (rg.t >= 1) rg.t = 0;
+  rg.playing = true; rg.last = 0;
+  setPlayIcon($("#ringPlay"), true);
+  cancelAnimationFrame(rg.raf);
+  rg.raf = requestAnimationFrame(tickRings);
+}
+function pauseRings() {
+  rg.playing = false;
+  cancelAnimationFrame(rg.raf);
+  setPlayIcon($("#ringPlay"), false);
+}
+$("#ringPlay").addEventListener("click", () => (rg.playing ? pauseRings() : playRings()));
+$("#ringRestart").innerHTML = ICONS.restart;
+$("#ringRestart").title = "Restart";
+$("#ringRestart").addEventListener("click", () => { rg.t = 0; playRings(); });
+$("#ringScrub").addEventListener("input", (e) => { rg.dragging = true; pauseRings(); rg.t = Number(e.target.value) / 1000; drawRingsCard(); });
+$("#ringScrub").addEventListener("change", () => (rg.dragging = false));
+setPlayIcon($("#ringPlay"), false);

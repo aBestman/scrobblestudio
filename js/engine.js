@@ -643,6 +643,22 @@
     return { range, labels, rank, plays, total, rolling, months };
   }
 
+  // Year rings: for each day since the first play, this song's plays in a window around that day:
+  // ?half=N months before and after (including the day's own month), so N=1 → about 3 months.
+  function songRings(q) {
+    const key = songOf(q.get("key")).key;
+    const half = intArg(q.get("half"), 1, 0, 12);
+    const halfDays = Math.round((half * 365) / 12) + 15;          // ± N months, plus half of the day's own month
+    const mine = E.rows.filter((r) => r.key === key);
+    const labels = periodRange("day", mine[0].ymd, ymdLocal(new Date()));
+    const at = new Map(labels.map((l, i) => [l, i]));
+    const prefix = new Array(labels.length + 1).fill(0);
+    for (const r of mine) prefix[at.get(r.ymd) + 1]++;
+    for (let i = 1; i < prefix.length; i++) prefix[i] += prefix[i - 1];
+    const values = labels.map((_, i) => prefix[Math.min(labels.length, i + halfDays + 1)] - prefix[Math.max(0, i - halfDays)]);
+    return { labels, values, half, months: 2 * half + 1 };
+  }
+
   // Song visual test: the song and its neighbours in the ranking (5 above, 4 below) at ~200 moments in time.
   function songLadder(q) {
     const key = songOf(q.get("key")).key;
@@ -1445,6 +1461,7 @@
       case "song": return songInfo(q);
       case "songrank": return songRank(q);
       case "songladder": songs(); return songLadder(q);
+      case "songrings": return songRings(q);
       case "recent": return recent(q);
       case "playlist": return playlist(q);
       case "tags": return tags();

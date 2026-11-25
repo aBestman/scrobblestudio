@@ -8,9 +8,9 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=16">
+  <link rel="stylesheet" href="style.css?v=17">
   <!-- Chart.js 4.4.1 (official npm release), stored in this repository so no outside code runs in the app -->
-  <script src="js/chart.umd.min.js?v=16"></script>
+  <script src="js/chart.umd.min.js?v=17"></script>
 </head>
 <body>
   <div class="sticky-top">
@@ -342,6 +342,23 @@
           </div>
         </section>
         <section class="card">
+          <div class="card-head chart-head">
+            <h2>Year rings</h2>
+            <label class="count-field" title="The window looks this many months back and ahead, plus the month itself (0-12)">Months before and after
+              <input type="number" id="ringHalf" min="0" max="12" step="1" value="1">
+            </label>
+          </div>
+          <p class="hint" style="margin-top:0">One ring per year around the calendar (January at the top); further out = more plays in a window around that date. 1 month before and after = a 3-month window. When it finishes, each year fills in lightly, so spots where many years overlap look darker: your habits.</p>
+          <canvas id="ringCanvas" class="lab-canvas" aria-label="Year rings: plays around each date, one ring per year"></canvas>
+          <div class="player">
+            <input type="range" class="scrub" id="ringScrub" min="0" max="1000" value="1000" aria-label="Position in time">
+            <div class="player-controls">
+              <button class="icon-btn" id="ringPlay" type="button" aria-label="Play"></button>
+              <button class="icon-btn ghost" id="ringRestart" type="button" aria-label="Restart"></button>
+            </div>
+          </div>
+        </section>
+        <section class="card">
           <div class="card-head"><h2>Played together</h2></div>
           <p class="hint">For every play of this song: the 3 songs you played most within 2 days before or after. These 5 made that top 3 most often.</p>
           <ol id="songTogether" class="ranklist together"></ol>
@@ -375,11 +392,11 @@
   </div>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="js/engine.js?v=16"></script>
-  <script src="js/nav.js?v=16"></script>
-  <script src="js/app.js?v=16"></script>
-  <script src="js/race.js?v=16"></script>
-  <script src="js/song.js?v=16"></script>
-  <script src="js/songlab.js?v=16"></script>
+  <script src="js/engine.js?v=17"></script>
+  <script src="js/nav.js?v=17"></script>
+  <script src="js/app.js?v=17"></script>
+  <script src="js/race.js?v=17"></script>
+  <script src="js/song.js?v=17"></script>
+  <script src="js/songlab.js?v=17"></script>
 </body>
 </html>

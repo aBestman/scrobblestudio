@@ -14,16 +14,20 @@
   };
   const svg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[name]}</svg>`;
   const onIndex = !/(settings|locations)\.html$/.test(location.pathname);
+  // Experimental pages only show when switched on under Settings → Experimental (window.showLab, also used by app.js).
+  let lab = false;
+  try { lab = localStorage.getItem("ss-show-lab") === "1"; } catch {}
+  window.showLab = lab;
   const ITEMS = [
     ["scrobbles", "Scrobbles", onIndex ? "#scrobbles" : "./#scrobbles"],
     ["song", "Deep Dive", onIndex ? "#song" : "./#song"],
-    ["lab", "🧪 Song visual test", onIndex ? "#lab" : "./#lab"],
+    lab ? ["lab", "🧪 Song visual test", onIndex ? "#lab" : "./#lab"] : undefined,
     ["race", "Bar race", onIndex ? "#race" : "./#race"],
     ["playlists", "Playlist Studio", onIndex ? "#playlists" : "./#playlists"],
     null,
     ["weather", "Weather locations", "locations.html"],
     ["settings", "Settings", "settings.html"],
-  ];
+  ].filter((it) => it !== undefined);
 
   const nav = document.createElement("nav");
   nav.className = "sidebar";

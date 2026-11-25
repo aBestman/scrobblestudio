@@ -955,10 +955,10 @@
 
   // Obsession finder: songs that, in some stretch of `days` days inside the period, made up at least `pct`%
   // of everything you scrobbled in those days. Each song counts once, with its strongest stretch; highest
-  // share first. A song needs at least OBSESSION_MIN plays in that stretch, so one lone play on a quiet
-  // week doesn't count as an obsession.
-  const OBSESSION_MIN = 3;
+  // share first. A song needs at least ?min_plays (default 3) plays in that stretch, so one lone play on a
+  // quiet week doesn't count as an obsession.
   function obsessions(q, limit) {
+    const OBSESSION_MIN = intArg(q.get("min_plays"), 3, 1, 100000);
     const N = intArg(q.get("days"), 7, 1, 3650);
     const pct = Math.max(0, Math.min(100, Number(q.get("pct")) || 5));
     const rows = filtered(new URLSearchParams({ start: q.get("start") || "", end: q.get("end") || "" }));

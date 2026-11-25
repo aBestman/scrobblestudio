@@ -660,7 +660,7 @@ $("#previewBtn").addEventListener("click", async () => {
   if (kind === "artists") params.artists = $("#artistInput").value;
   if (kind === "genre") params.tag = $("#tagInput").value;
   if (kind === "onthisday") params.window = $("#window").value;
-  if (kind === "obsession") Object.assign(params, { days: $("#obDays").value, pct: $("#obPct").value });
+  if (kind === "obsession") Object.assign(params, { days: $("#obDays").value, pct: $("#obPct").value, min_plays: $("#obMin").value });
   if (kind === "weather") {
     Object.assign(params, {
       cond: $("#wCond").value, scope: $("#wScope").value, sort: $("#wSort").value,
@@ -744,6 +744,7 @@ let currentPage = null;
 function pageFromHash() {
   const p = location.hash.slice(1).split("=")[0];          // "#song=<key>" -> "song"
   if (p === "trends") return "scrobbles";               // Trends was merged into Scrobbles
+  if (p === "lab" && !window.showLab) return "scrobbles"; // experimental: only when switched on in Settings
   return p in PAGES ? p : "scrobbles";
 }
 async function refreshPage() {

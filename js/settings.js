@@ -12,6 +12,13 @@ function toast(text, ms = 4000) {
   toast._timer = setTimeout(() => (t.hidden = true), ms);
 }
 
+// ---------------------------------------------------------------- 5 · Experimental pages (menu rebuilds on reload)
+$("#showLab").checked = !!window.showLab;
+$("#showLab").addEventListener("change", (e) => {
+  try { localStorage.setItem("ss-show-lab", e.target.checked ? "1" : "0"); } catch {}
+  location.reload();
+});
+
 // ---------------------------------------------------------------- 1 · Last.fm
 const s = Studio.settings();
 $("#lfUser").value = s.lastfm_user || "";

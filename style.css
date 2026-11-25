@@ -446,3 +446,19 @@ label.wide input { flex: 1; }
 
 /* The date you're at, right under a player's slider (test page) */
 .player-date { text-align: center; font-size: 18px; font-weight: 700; color: var(--text); margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+/* Song deep dive: the song's name and numbers stay pinned under the top bar while you scroll */
+.song-head {
+  position: sticky; top: var(--stick, 0px); z-index: 4;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px 20px; flex-wrap: wrap;
+  margin: -8px -16px 0; padding: 10px 16px; background: var(--bg); border-bottom: 1px solid var(--line);
+}
+.song-head-text { min-width: 0; }
+.song-head h2 { overflow: hidden; text-overflow: ellipsis; }
+.song-head-nums { display: flex; gap: 16px; font-size: 14px; color: var(--muted); white-space: nowrap; }
+.song-head-nums b { font-size: 18px; color: var(--text); }
+@media (max-width: 700px), (max-height: 500px) and (orientation: landscape) {
+  .song-head { padding: 8px 16px; }
+  .song-head h2 { font-size: 19px; white-space: nowrap; }
+  .song-head-nums b { font-size: 16px; }
+}

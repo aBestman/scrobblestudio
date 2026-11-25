@@ -8,9 +8,9 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=19">
+  <link rel="stylesheet" href="style.css?v=20">
   <!-- Chart.js 4.4.1 (official npm release), stored in this repository so no outside code runs in the app -->
-  <script src="js/chart.umd.min.js?v=19"></script>
+  <script src="js/chart.umd.min.js?v=20"></script>
 </head>
 <body>
   <div class="sticky-top">
@@ -323,18 +323,20 @@
       </section>
       <section class="card hint" id="songEmpty">Search a song above, or click a song in the Top songs list on the Scrobbles page.</section>
       <div id="songBody" class="song-body" hidden>
-        <div class="song-head"><h2 id="songTitle"></h2><span class="hint" id="songSub"></span></div>
+        <div class="song-head" id="songHead"><div class="song-head-text"><h2 id="songTitle"></h2><span class="hint" id="songSub"></span></div><div class="song-head-nums" id="songHeadNums"></div></div>
         <section class="stats" id="songStats"></section>
         <section class="card">
           <div class="card-head chart-head">
-            <h2>Position among all your songs</h2>
+            <h2>Skyline: position among all your songs</h2>
             <div class="seg seg-neutral" id="songRange" role="group" aria-label="Period">
               <button data-range="all">All time</button><button data-range="year">This year</button><button data-range="month">This month</button>
             </div>
           </div>
-          <canvas id="songCanvas" aria-label="The song's rank over time"></canvas>
+          <p class="hint" style="margin-top:0">Every song is a grey bar: left to right = position (#1 on the right), height = plays so far. This song is the wider red bar; +N floats up when it overtakes songs.</p>
+          <canvas id="songCanvas" aria-label="Skyline: every song's plays so far by position, this song in red"></canvas>
           <div class="player">
             <input type="range" class="scrub" id="songScrub" min="0" max="1000" value="1000" aria-label="Position in time">
+            <div class="player-date" id="songDate"></div>
             <div class="player-controls">
               <button class="icon-btn" id="songPlay" type="button" aria-label="Play"></button>
               <button class="icon-btn ghost" id="songRestart" type="button" aria-label="Restart"></button>
@@ -352,6 +354,7 @@
           <canvas id="ringCanvas" class="lab-canvas" aria-label="Year rings: plays around each date, one ring per year"></canvas>
           <div class="player">
             <input type="range" class="scrub" id="ringScrub" min="0" max="1000" value="1000" aria-label="Position in time">
+            <div class="player-date" id="ringDate"></div>
             <div class="player-controls">
               <button class="icon-btn" id="ringPlay" type="button" aria-label="Play"></button>
               <button class="icon-btn ghost" id="ringRestart" type="button" aria-label="Restart"></button>
@@ -392,11 +395,11 @@
   </div>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="js/engine.js?v=19"></script>
-  <script src="js/nav.js?v=19"></script>
-  <script src="js/app.js?v=19"></script>
-  <script src="js/race.js?v=19"></script>
-  <script src="js/song.js?v=19"></script>
-  <script src="js/songlab.js?v=19"></script>
+  <script src="js/engine.js?v=20"></script>
+  <script src="js/nav.js?v=20"></script>
+  <script src="js/app.js?v=20"></script>
+  <script src="js/race.js?v=20"></script>
+  <script src="js/song.js?v=20"></script>
+  <script src="js/songlab.js?v=20"></script>
 </body>
 </html>

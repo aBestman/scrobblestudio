@@ -3,7 +3,6 @@
 // setPlayIcon, ICONS) and niceDate() from song.js.
 
 const lab = { key: null, range: "all", months: 12, rank: null, ladder: null, ladderFor: "" };
-const LAB_FONT = "Segoe UI, system-ui, sans-serif";
 
 // ---------------------------------------------------------------- search + shared controls
 let labTimer;
@@ -77,43 +76,6 @@ async function loadLabData(all) {
 }
 
 // ---------------------------------------------------------------- shared drawing helpers
-function prepCanvas(canvas, wantH) {
-  const dpr = window.devicePixelRatio || 1;
-  const W = canvas.clientWidth || 800, narrow = W < 600;
-  const H = typeof wantH === "function" ? wantH(W, narrow) : wantH;
-  if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
-    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); canvas.style.height = H + "px";
-  }
-  const ctx = canvas.getContext("2d");
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = css("--card"); ctx.fillRect(0, 0, W, H);
-  return { ctx, W, H, narrow, ink: css("--text"), muted: css("--muted"), line: css("--line"), accent: css("--accent") };
-}
-// Position in the data for player time t (0..1), with the rank interpolated on a log scale.
-function labAt(d, t) {
-  const N = d.labels.length, f = t * (N - 1), i = Math.floor(f), j = Math.min(N - 1, i + 1), u = f - i;
-  let r = d.rank[i], v = d.rolling[i];
-  if (d.rank[i] !== null && d.rank[j] !== null) {
-    r = 10 ** (Math.log10(d.rank[i]) * (1 - u) + Math.log10(d.rank[j]) * u);
-    v = d.rolling[i] * (1 - u) + d.rolling[j] * u;
-  }
-  return { N, f, i, r, v, k: Math.round(f) };
-}
-const niceStep = (max) => [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000].find((s) => max / s <= 5) || 2000;
-const windowWord = (m) => (m === 12 ? "last 12 months" : `last ${m} month${m === 1 ? "" : "s"}`);
-
-function header(g, big, red, sub) {
-  const { ctx, narrow, ink, muted, accent } = g;
-  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
-  ctx.fillStyle = ink; ctx.font = `700 ${narrow ? 24 : 30}px ${LAB_FONT}`;
-  ctx.fillText(big, 12, narrow ? 30 : 34);
-  const w = ctx.measureText(big).width;
-  ctx.font = `600 ${narrow ? 12 : 14}px ${LAB_FONT}`; ctx.fillStyle = accent;
-  ctx.fillText(red, narrow ? 12 : 24 + w, narrow ? 48 : 34);
-  ctx.font = `12px ${LAB_FONT}`; ctx.fillStyle = muted;
-  ctx.fillText(sub, 12, narrow ? 64 : 54);
-}
-
 // The aging trail (fresh part dark and thick, older parts light and thin), drawn in 24 shades.
 function agingPath(ctx, accent, count, upto, fadeSteps, point) {
   const B = 24, shade = (age) => Math.min(B - 1, Math.floor((age / fadeSteps) * B));
@@ -305,84 +267,8 @@ function drawRings(v) {
   drawYearRings(v.canvas, d && d.labels, d ? d.rolling : [], v.t, () => `in the ${windowWord(d.months)}`);
 }
 
-// ---------------------------------------------------------------- F: skyline
-// Every song as a grey bar: left-right = position (#1 on the right, log scale over ALL songs in the period, so
-// the axis never moves), height = its plays so far. This song is the wider red bar. When it overtakes songs,
-// a small "+N" floats up from it.
-function drawPulse(v) {
-  const d = lab.rank, ld = lab.ladder;
-  const g = prepCanvas(v.canvas, (W, narrow) => (narrow ? 300 : 320));
-  if (!d || !ld || !ld.frames.length) return;
-  const { ctx, W, H, narrow, muted, line, accent } = g;
-  // Softened log scale: log(rank + 20) instead of log(rank), so the top 10 doesn't take a huge share of the width.
-  const SOFT = 20, lg0 = Math.log10(1 + SOFT), lgSpan = Math.log10(Math.max(10, ld.songsEnd) + SOFT) - lg0;
-  const decades = Math.log10(Math.max(10, ld.songsEnd));
-  const topPlays = Math.max(1, ...ld.frames.at(-1).dist);
-  const step = niceStep(topPlays), topV = Math.ceil(topPlays / step) * step;
-  const L = narrow ? 36 : 46, R = narrow ? 16 : 24, T = narrow ? 96 : 86, B = 36;
-  const x = (r) => Math.min(W - R, L + (1 - (Math.log10(r + SOFT) - lg0) / lgSpan) * (W - L - R));
-  const y = (val) => H - B - (val / topV) * (H - T - B);
-
-  // Grid: plays so far, and positions
-  ctx.font = `11px ${LAB_FONT}`; ctx.lineWidth = 1;
-  ctx.textAlign = "right"; ctx.textBaseline = "middle";
-  for (let val = 0; val <= topV; val += step) {
-    ctx.strokeStyle = line; ctx.beginPath(); ctx.moveTo(L, y(val)); ctx.lineTo(W - R, y(val)); ctx.stroke();
-    ctx.fillStyle = muted; ctx.fillText(fmt(val), L - 6, y(val));
-  }
-  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
-  let lastLabel = -1e9;
-  for (let k = Math.floor(decades); k >= 0; k--) {
-    const xx = x(10 ** k), lx = Math.min(W - R - 8, Math.max(L + 12, xx));
-    ctx.strokeStyle = line; ctx.beginPath(); ctx.moveTo(xx, H - B); ctx.lineTo(xx, H - B + 4); ctx.stroke();
-    if (lx - lastLabel < 34) continue;                    // too close to the previous label (#1 next to #10 on phones)
-    ctx.fillStyle = muted; ctx.fillText(`#${fmt(10 ** k)}`, lx, H - B + 16);
-    lastLabel = lx;
-  }
-  ctx.textAlign = "right"; ctx.fillText(`position among all ${fmt(ld.songsEnd)} songs → #1`, W - R, H - 4);
-  ctx.textAlign = "left"; ctx.fillText("plays so far", L, T - 10);
-
-  // The other songs, blended between the two nearest snapshots
-  const F = ld.frames.length, ff = v.t * (F - 1), fi = Math.floor(ff), fj = Math.min(F - 1, fi + 1), fu = ff - fi;
-  const A = ld.frames[fi].dist, Bv = ld.frames[fj].dist, ranks = ld.distRanks;
-  ctx.fillStyle = muted; ctx.globalAlpha = 0.45;
-  ctx.beginPath();
-  for (let s = 0; s < ranks.length; s++) {
-    const val = A[s] * (1 - fu) + Bv[s] * fu;
-    if (val <= 0) continue;
-    // Each bar fills its whole slot: from halfway to the next-better song to halfway to the next sampled one,
-    // so there are no gaps between bars.
-    const right = x(ranks[s] - 0.5), left = s + 1 < ranks.length ? x(ranks[s + 1] - 0.5) : L;
-    ctx.rect(left, y(val), right - left + 0.4, y(0) - y(val));
-  }
-  ctx.fill(); ctx.globalAlpha = 1;
-
-  // This song: the red bar (wider than the rest), plays so far
-  const a = labAt(d, v.t);
-  if (a.r !== null) {
-    const i = a.i, j = Math.min(a.N - 1, i + 1), u = a.f - i;
-    const mine = d.plays[i] * (1 - u) + d.plays[j] * u;
-    const bw = narrow ? 10 : 14, bx = x(a.r), by = y(mine);
-    ctx.fillStyle = accent; ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(bx - bw / 2, by, bw, Math.max(2, y(0) - by), [4, 4, 0, 0]) : ctx.rect(bx - bw / 2, by, bw, y(0) - by);
-    ctx.fill();
-
-    // Overtakes: "+N" (songs passed) floats up from the bar and fades; ~0.7 s of playback per label.
-    const life = Math.max(2, (a.N - 1) * (700 / v.duration)), slot = Math.max(1, Math.round(life / 4));
-    ctx.textAlign = "center"; ctx.font = `600 11px ${LAB_FONT}`; ctx.fillStyle = accent;
-    for (let end = Math.floor(a.f / slot) * slot; end > 0 && a.f - end < life; end -= slot) {
-      const r0 = d.rank[Math.max(0, end - slot)], r1 = d.rank[end];
-      if (r0 === null || r1 === null || r0 <= r1) continue;
-      const age = (a.f - end) / life;
-      ctx.globalAlpha = 0.9 * (1 - age);
-      ctx.fillText(`+${fmt(r0 - r1)}`, bx, by - 8 - age * 26);
-    }
-    ctx.globalAlpha = 1;
-  }
-  const rk = d.rank[a.k];
-  header(g, rk === null ? "–" : `#${fmt(rk)}`, `${fmt(d.plays[a.k])} plays so far`,
-    `${niceDate(d.labels[a.k])} · of ${fmt(d.total[a.k])} songs`);
-}
+// ---------------------------------------------------------------- F: skyline (now on the Song deep dive; shared code in song.js)
+function drawPulse(v) { drawSkyline(v.canvas, lab.rank, lab.ladder, v.t, v.duration); }
 
 // ---------------------------------------------------------------- visuals + their own players
 // [id, title, description, draw, duration ms, has "Mountain outline" switch]

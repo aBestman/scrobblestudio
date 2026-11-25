@@ -8,9 +8,9 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=23">
+  <link rel="stylesheet" href="style.css?v=24">
   <!-- Chart.js 4.4.1 (official npm release), stored in this repository so no outside code runs in the app -->
-  <script src="js/chart.umd.min.js?v=23"></script>
+  <script src="js/chart.umd.min.js?v=24"></script>
 </head>
 <body>
   <div class="sticky-top">
@@ -317,13 +317,14 @@
     <main class="page-main">
       <section class="card song-search">
         <div class="search-wrap">
-          <input type="search" id="songQuery" placeholder="Search a song or artist from your library…" autocomplete="off" aria-label="Search a song">
+          <input type="search" id="songQuery" placeholder="Search library" autocomplete="off" aria-label="Search library">
           <ul id="songResults" class="suggest" hidden></ul>
         </div>
       </section>
       <section class="card hint" id="songEmpty">Search a song above, or hold (long press) an artist, song or album on the Scrobbles page.</section>
       <div id="songBody" class="song-body" hidden>
         <div class="song-head" id="songHead"><div class="seg seg-neutral dive-tabs" id="diveTabs" role="tablist" aria-label="Artist, song or album"><button data-kind="artist">Artist</button><button data-kind="song">Song</button><button data-kind="album">Album</button></div><div class="song-head-text"><h2 id="songTitle"></h2><span class="hint" id="songSub"></span></div><div class="song-head-nums" id="songHeadNums"></div></div>
+        <div id="diveLoading" class="dive-loading" hidden>Loading…</div>
         <div id="diveContent" class="dive-content">
         <section class="stats" id="songStats"></section>
         <section class="card">
@@ -381,7 +382,7 @@
       <section class="card lab-controls">
         <p class="hint" style="margin-top:0">🧪 Temporary test page: compare different ways to show a song's journey. Pick a song, then play each visual with its own controls.</p>
         <div class="search-wrap">
-          <input type="search" id="labQuery" placeholder="Search a song or artist from your library…" autocomplete="off" aria-label="Search a song">
+          <input type="search" id="labQuery" placeholder="Search library" autocomplete="off" aria-label="Search library">
           <ul id="labResults" class="suggest" hidden></ul>
         </div>
         <div class="lab-opts">
@@ -400,11 +401,11 @@
   </div>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="js/engine.js?v=23"></script>
-  <script src="js/nav.js?v=23"></script>
-  <script src="js/app.js?v=23"></script>
-  <script src="js/race.js?v=23"></script>
-  <script src="js/song.js?v=23"></script>
-  <script src="js/songlab.js?v=23"></script>
+  <script src="js/engine.js?v=24"></script>
+  <script src="js/nav.js?v=24"></script>
+  <script src="js/app.js?v=24"></script>
+  <script src="js/race.js?v=24"></script>
+  <script src="js/song.js?v=24"></script>
+  <script src="js/songlab.js?v=24"></script>
 </body>
 </html>

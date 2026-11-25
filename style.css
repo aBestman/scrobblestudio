@@ -467,10 +467,12 @@ label.wide input { flex: 1; }
 .song-head .dive-tabs { flex-basis: 100%; }
 .dive-tabs button:disabled { opacity: .4; cursor: not-allowed; }
 .dive-content { display: grid; gap: 16px; }
-.dive-content.slide-next { animation: dive-next .28s ease-out; }
-.dive-content.slide-prev { animation: dive-prev .28s ease-out; }
-@keyframes dive-next { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
-@keyframes dive-prev { from { transform: translateX(-40px); opacity: 0; } to { transform: none; opacity: 1; } }
+.dive-content { will-change: transform; }
+.dive-content.is-loading { visibility: hidden; }
+.dive-loading { padding: 40px 0; text-align: center; color: var(--muted); font-size: 15px; }
+.dive-loading::before { content: ""; display: inline-block; width: 14px; height: 14px; margin-right: 10px; vertical-align: -2px;
+  border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: dive-spin .8s linear infinite; }
+@keyframes dive-spin { to { transform: rotate(360deg); } }
 #songBody { touch-action: pan-y; overflow-x: clip; }
 /* Lists you can long-press: no text selection or phone menu while holding */
 #artistList li, #trackList li, #albumList li, #recentList li[data-key] { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }

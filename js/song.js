@@ -49,12 +49,42 @@ $("#songQuery").addEventListener("blur", () => setTimeout(() => ($("#songResults
 // ---------------------------------------------------------------- page
 // Address: #song=<song key>&a=<artist>&b=<album>&k=<artist|song|album>. The three stay together while you
 // swipe, so you can go back and forth between the same song, its artist and its album.
-const infoCache = new Map();
-async function getInfo(kind, key) {
-  const id = kind + "|" + key;
-  if (!infoCache.has(id)) infoCache.set(id, await api("/api/song?" + new URLSearchParams({ kind, key })));
-  return infoCache.get(id);
+// Everything the Deep Dive asks the engine for, kept while you stay with the same song / artist / album.
+// On first entry all three are worked out (behind a short "Loading…"), so switching afterwards is instant.
+const diveCache = new Map();
+function cached(path) {
+  if (!diveCache.has(path)) diveCache.set(path, api(path).catch((e) => { diveCache.delete(path); throw e; }));
+  return diveCache.get(path);
 }
+const qs = (o) => new URLSearchParams(o).toString();
+const infoPath = (kind, key) => "/api/song?" + qs({ kind, key });
+const rankPath = (kind, key, range) => "/api/songrank?" + qs({ kind, key, range });
+const ladderPath = (kind, key, range) => "/api/songladder?" + qs({ kind, key, range });
+const ringsPath = (kind, key, half) => "/api/songrings?" + qs({ kind, key, half });
+const getInfo = (kind, key) => cached(infoPath(kind, key));
+const nextPaint = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+function showLoading(on, text) {
+  $("#diveLoading").hidden = !on;
+  if (text) $("#diveLoading").textContent = text;
+  $("#diveContent").classList.toggle("is-loading", on);
+}
+// Work out every view of the trio for the current period (the engine is busy meanwhile, so do it in one go).
+async function preloadTrio(trio, what) {
+  const kinds = DIVE_ORDER.filter((k) => trio[k]);
+  const need = kinds.some((k) => !diveCache.has(rankPath(k, trio[k], sd.range)) || !diveCache.has(infoPath(k, trio[k])));
+  if (!need) return;
+  showLoading(true, what);
+  await nextPaint();                                       // let "Loading…" show before the number crunching
+  try {
+    for (const k of kinds) {
+      await getInfo(k, trio[k]);
+      await cached(rankPath(k, trio[k], sd.range));
+      await cached(ladderPath(k, trio[k], sd.range));
+      await cached(ringsPath(k, trio[k], ringHalf()));
+    }
+  } finally { showLoading(false); }
+}
+
 window.loadSong = async () => {
   let p = new URLSearchParams(location.hash.slice(1));
   if (!p.get("song")) {                                   // nothing in the address: the last one you looked at
@@ -64,7 +94,7 @@ window.loadSong = async () => {
   }
   const trio = { song: p.get("song") || "", artist: p.get("a"), album: p.get("b") };
   let kind = DIVE_ORDER.includes(p.get("k")) ? p.get("k") : "song";
-  if (!sd.trio || sd.trio.song !== trio.song) infoCache.clear();   // keep cached numbers only while swiping
+  if (!sd.trio || sd.trio.song !== trio.song) diveCache.clear();   // keep cached results only while swiping
   $("#songEmpty").hidden = !!trio.song;
   $("#songBody").hidden = !trio.song;
   if (!trio.song) { setTimeout(() => $("#songQuery").focus(), 50); return; }
@@ -72,27 +102,28 @@ window.loadSong = async () => {
     if (!trio.artist) { const s = await getInfo("song", trio.song); trio.artist = s.links.artist; trio.album = s.links.album; }
     if (kind === "album" && !trio.album) kind = "song";   // no album info for this song
     const key = trio[kind];
-    if (kind === sd.kind && key === sd.key && sd.info) { markDiveTabs(); drawSong(); drawRingsCard(); return; }
+    if (kind === sd.kind && key === sd.key && sd.info) { markDiveTabs(); drawSong(); drawRingsCard(); resetSlide(); return; }
     const from = sd.trio && sd.trio.song === trio.song ? DIVE_ORDER.indexOf(sd.kind) : -1;
     pauseSong();
     pauseRings();
+    await preloadTrio(trio, "Loading artist, song and album…");
     const info = await getInfo(kind, key);
     Object.assign(sd, { kind, key, trio, info });
     try { localStorage.setItem("ss-dive", diveHash(trio, kind).slice(1)); } catch {}
+    markDiveTabs();
+    renderSongInfo();
+    await Promise.all([loadRings(), loadSongRank()]);
     slideIn(from < 0 ? 0 : Math.sign(DIVE_ORDER.indexOf(kind) - from));
   } catch (e) {
     toast(e.message, 6000);
+    resetSlide();
     $("#songEmpty").hidden = false;
     $("#songBody").hidden = true;
-    return;
   }
-  markDiveTabs();
-  renderSongInfo();
-  loadRings();
-  await loadSongRank();
 };
 
-// Tabs and swiping: artist ‹ song › album
+// Tabs and swiping: artist ‹ song › album. The page follows your finger; let go past ~¼ of the width
+// (or flick) and it slides on to the next one, otherwise it springs back.
 function markDiveTabs() {
   $$("#diveTabs button").forEach((b) => {
     b.classList.toggle("active", b.dataset.kind === sd.kind);
@@ -100,30 +131,59 @@ function markDiveTabs() {
     b.title = b.disabled ? "No album info for this song" : "";
   });
 }
-function goDive(kind) {
-  if (!sd.trio || kind === sd.kind || (kind === "album" && !sd.trio.album)) return;
-  location.hash = diveHash(sd.trio, kind);
+const canGo = (kind) => sd.trio && kind && kind !== sd.kind && !(kind === "album" && !sd.trio.album);
+const neighbour = (step) => DIVE_ORDER[DIVE_ORDER.indexOf(sd.kind) + step];
+const SLIDE_MS = 220;
+function moveTo(x, ms, ease) {
+  const el = $("#diveContent");
+  el.style.transition = ms ? `transform ${ms}ms ${ease}, opacity ${ms}ms ${ease}` : "none";
+  el.style.transform = x ? `translateX(${x}px)` : "";
+  el.style.opacity = x ? String(Math.max(0.35, 1 - Math.abs(x) / el.offsetWidth)) : "";
+}
+function resetSlide() { moveTo(0, 0); }
+async function goDive(kind) {
+  if (!canGo(kind)) return;
+  const dir = Math.sign(DIVE_ORDER.indexOf(kind) - DIVE_ORDER.indexOf(sd.kind));
+  moveTo(-dir * $("#diveContent").offsetWidth, SLIDE_MS, "ease-in");   // slide the current one out…
+  await new Promise((r) => setTimeout(r, SLIDE_MS));
+  location.hash = diveHash(sd.trio, kind);                              // …loadSong slides the next one in
+}
+function slideIn(dir) {
+  if (!dir) { resetSlide(); return; }
+  moveTo(dir * $("#diveContent").offsetWidth, 0);
+  void $("#diveContent").offsetWidth;                                   // start from the side…
+  moveTo(0, SLIDE_MS + 60, "ease-out");                                 // …and glide into place
 }
 $$("#diveTabs button").forEach((b) => b.addEventListener("click", () => goDive(b.dataset.kind)));
+
 let swipe = null;
 $("#songBody").addEventListener("touchstart", (e) => {
-  swipe = e.touches.length === 1 && !e.target.closest("input, select, textarea, button") ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+  swipe = e.touches.length === 1 && !e.target.closest("input, select, textarea, button")
+    ? { x: e.touches[0].clientX, y: e.touches[0].clientY, t: performance.now(), axis: null, dx: 0 } : null;
 }, { passive: true });
-$("#songBody").addEventListener("touchend", (e) => {
+$("#songBody").addEventListener("touchmove", (e) => {
   if (!swipe) return;
-  const dx = e.changedTouches[0].clientX - swipe.x, dy = e.changedTouches[0].clientY - swipe.y;
-  swipe = null;
-  if (Math.abs(dx) < 60 || Math.abs(dx) < 1.5 * Math.abs(dy)) return;   // mostly sideways, far enough
-  const i = DIVE_ORDER.indexOf(sd.kind) + (dx < 0 ? 1 : -1);             // swipe left → next (artist → song → album)
-  if (i >= 0 && i < DIVE_ORDER.length) goDive(DIVE_ORDER[i]);
+  const dx = e.touches[0].clientX - swipe.x, dy = e.touches[0].clientY - swipe.y;
+  if (!swipe.axis) {
+    if (Math.hypot(dx, dy) < 8) return;
+    swipe.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";               // decide once: sideways swipe or scrolling
+  }
+  if (swipe.axis !== "x") return;
+  const target = neighbour(dx < 0 ? 1 : -1);
+  swipe.dx = canGo(target) ? dx : dx / 4;                               // nothing there: just a little give
+  moveTo(swipe.dx, 0);
 }, { passive: true });
-function slideIn(dir) {
-  const el = $("#diveContent");
-  el.classList.remove("slide-next", "slide-prev");
-  if (!dir) return;
-  void el.offsetWidth;                                     // restart the animation
-  el.classList.add(dir > 0 ? "slide-next" : "slide-prev");
-}
+$("#songBody").addEventListener("touchend", () => {
+  if (!swipe) return;
+  const s = swipe;
+  swipe = null;
+  if (s.axis !== "x") return;
+  const target = neighbour(s.dx < 0 ? 1 : -1);
+  const fast = Math.abs(s.dx) > 40 && Math.abs(s.dx) / (performance.now() - s.t) > 0.5;   // a quick flick
+  if (canGo(target) && (Math.abs(s.dx) > $("#diveContent").offsetWidth / 4 || fast)) goDive(target);
+  else moveTo(0, 200, "ease-out");                                      // spring back
+}, { passive: true });
+$("#songBody").addEventListener("touchcancel", () => { if (swipe) { swipe = null; moveTo(0, 200, "ease-out"); } }, { passive: true });
 
 function renderSongInfo() {
   const s = sd.info, kind = sd.kind;
@@ -280,14 +340,20 @@ function drawSkyline(canvas, d, ld, t, duration, scale = SKY_SCALE_DEFAULT) {
 
 // ---------------------------------------------------------------- rank over time
 function markSongRange() { $$("#songRange button").forEach((b) => b.classList.toggle("active", b.dataset.range === sd.range)); }
-$$("#songRange button").forEach((b) => b.addEventListener("click", () => { sd.range = b.dataset.range; markSongRange(); loadSongRank(); }));
+$$("#songRange button").forEach((b) => b.addEventListener("click", async () => {
+  if (b.dataset.range === sd.range) return;
+  pauseSong();
+  sd.range = b.dataset.range;
+  markSongRange();
+  try { await preloadTrio(sd.trio, "Loading this period…"); } catch (e) { toast(e.message, 6000); }
+  loadSongRank();
+}));
 markSongRange();
 
 async function loadSongRank() {
   pauseSong();
   try {
-    const q = new URLSearchParams({ kind: sd.kind, key: sd.key, range: sd.range });
-    [sd.rank, sd.ladder] = await Promise.all([api("/api/songrank?" + q), api("/api/songladder?" + q)]);
+    [sd.rank, sd.ladder] = await Promise.all([cached(rankPath(sd.kind, sd.key, sd.range)), cached(ladderPath(sd.kind, sd.key, sd.range))]);
   } catch (e) {
     sd.rank = null; sd.ladder = null;
     toast(e.message, 6000);
@@ -381,7 +447,7 @@ async function loadRings() {
   pauseRings();
   rg.half = ringHalf();
   try {
-    rg.data = await api("/api/songrings?" + new URLSearchParams({ kind: sd.kind, key: sd.key, half: rg.half }));
+    rg.data = await cached(ringsPath(sd.kind, sd.key, rg.half));
   } catch (e) {
     rg.data = null;
     toast(e.message, 6000);

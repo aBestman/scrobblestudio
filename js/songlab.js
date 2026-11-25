@@ -305,75 +305,77 @@ function drawRings(v) {
   drawYearRings(v.canvas, d && d.labels, d ? d.rolling : [], v.t, () => `in the ${windowWord(d.months)}`);
 }
 
-// ---------------------------------------------------------------- F: pulse bar
-// Like B, but no trail and a fixed, low bar: left-right = position (#1 right), the bar's WIDTH = plays in the
-// rolling window. When it climbs, grey "ghost" bars drop off to its left (the songs it just passed) and drift
-// away while fading; when it drops, they appear on the right (the songs passing it).
+// ---------------------------------------------------------------- F: skyline
+// Every song as a grey bar: left-right = position (#1 on the right, log scale over ALL songs in the period, so
+// the axis never moves), height = its plays so far. This song is the wider red bar. When it overtakes songs,
+// a small "+N" floats up from it.
 function drawPulse(v) {
-  const d = lab.rank;
-  const g = prepCanvas(v.canvas, (W, narrow) => (narrow ? 230 : 240));
-  if (!d) return;
+  const d = lab.rank, ld = lab.ladder;
+  const g = prepCanvas(v.canvas, (W, narrow) => (narrow ? 300 : 320));
+  if (!d || !ld || !ld.frames.length) return;
   const { ctx, W, H, narrow, muted, line, accent } = g;
-  const known = d.rank.filter((r) => r !== null);
-  if (!known.length) return;
-  const decades = Math.max(1, Math.ceil(Math.log10(Math.max(2, ...known))));
-  const maxRoll = Math.max(1, ...d.rolling);
-  const L = narrow ? 22 : 30, R = narrow ? 22 : 34, B = 36;
-  const base = H - B, barH = narrow ? 56 : 66;
+  const decades = Math.max(1, Math.log10(Math.max(10, ld.songsEnd)));
+  const topPlays = Math.max(1, ...ld.frames.at(-1).dist);
+  const step = niceStep(topPlays), topV = Math.ceil(topPlays / step) * step;
+  const L = narrow ? 36 : 46, R = narrow ? 16 : 24, T = narrow ? 96 : 86, B = 36;
   const x = (r) => L + (1 - Math.log10(r) / decades) * (W - L - R);
+  const y = (val) => H - B - (val / topV) * (H - T - B);
 
-  // Baseline and rank ticks
-  ctx.strokeStyle = line; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(L, base + 0.5); ctx.lineTo(W - R, base + 0.5); ctx.stroke();
-  ctx.font = `11px ${LAB_FONT}`; ctx.fillStyle = muted; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
-  for (let k = decades; k >= 0; k--) {
+  // Grid: plays so far, and positions
+  ctx.font = `11px ${LAB_FONT}`; ctx.lineWidth = 1;
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (let val = 0; val <= topV; val += step) {
+    ctx.strokeStyle = line; ctx.beginPath(); ctx.moveTo(L, y(val)); ctx.lineTo(W - R, y(val)); ctx.stroke();
+    ctx.fillStyle = muted; ctx.fillText(fmt(val), L - 6, y(val));
+  }
+  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  for (let k = Math.floor(decades); k >= 0; k--) {
     const xx = x(10 ** k);
-    ctx.beginPath(); ctx.moveTo(xx, base); ctx.lineTo(xx, base + 4); ctx.stroke();
-    ctx.fillText(`#${fmt(10 ** k)}`, Math.min(W - R - 8, Math.max(L + 12, xx)), base + 16);
+    ctx.strokeStyle = line; ctx.beginPath(); ctx.moveTo(xx, H - B); ctx.lineTo(xx, H - B + 4); ctx.stroke();
+    ctx.fillStyle = muted; ctx.fillText(`#${fmt(10 ** k)}`, Math.min(W - R - 8, Math.max(L + 12, xx)), H - B + 16);
   }
-  ctx.textAlign = "right"; ctx.fillText("position → #1", W - R, H - 4);
-  ctx.textAlign = "left"; ctx.fillText(`width = plays in the ${windowWord(d.months)}`, L, H - 4);
+  ctx.textAlign = "right"; ctx.fillText(`position among all ${fmt(ld.songsEnd)} songs → #1`, W - R, H - 4);
+  ctx.textAlign = "left"; ctx.fillText("plays so far", L, T - 10);
 
+  // The other songs, blended between the two nearest snapshots
+  const F = ld.frames.length, ff = v.t * (F - 1), fi = Math.floor(ff), fj = Math.min(F - 1, fi + 1), fu = ff - fi;
+  const A = ld.frames[fi].dist, Bv = ld.frames[fj].dist, ranks = ld.distRanks;
+  const cap = narrow ? 4 : 6;
+  ctx.fillStyle = muted; ctx.globalAlpha = 0.45;
+  ctx.beginPath();
+  for (let s = 0; s < ranks.length; s++) {
+    const val = A[s] * (1 - fu) + Bv[s] * fu;
+    if (val <= 0) continue;
+    const xr = x(ranks[s]), xn = s + 1 < ranks.length ? x(ranks[s + 1]) : L, gap = xr - xn;
+    if (gap < 3) ctx.rect(xn, y(val), gap + 0.6, y(0) - y(val));          // the long tail: bars touch → an area
+    else { const w = Math.min(cap, gap * 0.6); ctx.rect(xr - w / 2, y(val), w, y(0) - y(val)); }
+  }
+  ctx.fill(); ctx.globalAlpha = 1;
+
+  // This song: the red bar (wider than the rest), plays so far
   const a = labAt(d, v.t);
-  if (a.r === null) {
-    header(g, "–", "not played yet", niceDate(d.labels[a.k]));
-    return;
-  }
-  const bx = x(a.r), bw = (narrow ? 6 : 8) + (a.v / maxRoll) * (narrow ? 30 : 46);
-
-  // Ghosts: the timeline is cut into fixed slots of a few days; every slot in which the rank changed sends one
-  // grey bar off to the side. Ghosts live ~0.7 s of playback, so their speed feels the same in every period.
-  const life = Math.max(2, (a.N - 1) * (700 / v.duration));          // in days
-  const slot = Math.max(1, Math.round(life / 7));
-  const gap = 4, drift = narrow ? 46 : 70, gw = narrow ? 5 : 6;
-  ctx.textAlign = "center"; ctx.font = `600 10px ${LAB_FONT}`;
-  for (let end = Math.floor(a.f / slot) * slot; end > 0 && a.f - end < life; end -= slot) {
-    const start = Math.max(0, end - slot), r0 = d.rank[start], r1 = d.rank[end];
-    if (r0 === null || r1 === null || r0 === r1) continue;
-    const age = (a.f - end) / life, passed = r0 - r1;                 // > 0: climbed past `passed` songs
-    const side = passed > 0 ? -1 : 1;
-    const ease = 1 - (1 - age) * (1 - age);                           // fast at first, then settling
-    const gx = bx + side * (bw / 2 + gap + gw / 2 + ease * drift);
-    const gh = barH * (0.45 + 0.35 * Math.min(1, Math.log10(Math.abs(passed) + 1) / 2)) * (1 - 0.35 * age);
-    ctx.globalAlpha = 0.5 * (1 - age);
-    ctx.fillStyle = muted;
-    ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(gx - gw / 2, base - gh, gw, gh, [3, 3, 0, 0]) : ctx.rect(gx - gw / 2, base - gh, gw, gh);
+  if (a.r !== null) {
+    const i = a.i, j = Math.min(a.N - 1, i + 1), u = a.f - i;
+    const mine = d.plays[i] * (1 - u) + d.plays[j] * u;
+    const bw = narrow ? 10 : 14, bx = x(a.r), by = y(mine);
+    ctx.fillStyle = accent; ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(bx - bw / 2, by, bw, Math.max(2, y(0) - by), [4, 4, 0, 0]) : ctx.rect(bx - bw / 2, by, bw, y(0) - by);
     ctx.fill();
-    if (age < 0.6 && Math.abs(passed) > 1) {
-      ctx.globalAlpha = 0.7 * (1 - age / 0.6);
-      ctx.fillText(passed > 0 ? `+${fmt(passed)}` : `−${fmt(-passed)}`, gx, base - gh - 5);
+
+    // Overtakes: "+N" (songs passed) floats up from the bar and fades; ~0.7 s of playback per label.
+    const life = Math.max(2, (a.N - 1) * (700 / v.duration)), slot = Math.max(1, Math.round(life / 4));
+    ctx.textAlign = "center"; ctx.font = `600 11px ${LAB_FONT}`; ctx.fillStyle = accent;
+    for (let end = Math.floor(a.f / slot) * slot; end > 0 && a.f - end < life; end -= slot) {
+      const r0 = d.rank[Math.max(0, end - slot)], r1 = d.rank[end];
+      if (r0 === null || r1 === null || r0 <= r1) continue;
+      const age = (a.f - end) / life;
+      ctx.globalAlpha = 0.9 * (1 - age);
+      ctx.fillText(`+${fmt(r0 - r1)}`, bx, by - 8 - age * 26);
     }
+    ctx.globalAlpha = 1;
   }
-  ctx.globalAlpha = 1;
-
-  // The bar itself: fixed height, width = rolling plays
-  ctx.fillStyle = accent; ctx.beginPath();
-  ctx.roundRect ? ctx.roundRect(bx - bw / 2, base - barH, bw, barH, [6, 6, 0, 0]) : ctx.rect(bx - bw / 2, base - barH, bw, barH);
-  ctx.fill();
-
   const rk = d.rank[a.k];
-  header(g, rk === null ? "–" : `#${fmt(rk)}`, `${fmt(d.rolling[a.k])} plays in the ${windowWord(d.months)}`,
+  header(g, rk === null ? "–" : `#${fmt(rk)}`, `${fmt(d.plays[a.k])} plays so far`,
     `${niceDate(d.labels[a.k])} · of ${fmt(d.total[a.k])} songs`);
 }
 
@@ -385,7 +387,7 @@ const LAB_DEFS = [
   ["flip", "C · Moving bar, flipped", "Same as B with the axes swapped: up/down = position (#1 at the top), left to right = plays in the rolling window.", (v) => drawMovingBar(v, true), 14000, true],
   ["ladder", "D · Neighbours ladder (idea)", "The song with the 5 songs just above and 4 just below it in your all-time ranking: watch who it overtakes.", drawLadder, 16000, false],
   ["rings", "E · Year rings (idea)", "One ring per year around the months (January at the top); further out = more plays in the rolling window. Shows seasonal habits. Try 1–3 rolling months. When it finishes, each year fills in lightly: darker = more years overlap.", drawRings, 16000, false],
-  ["pulse", "F · Pulse bar", "Like B without the trail: a low bar of fixed height, left to right = position (#1 on the right), its width = plays in the rolling window. Grey bars drop off to the left as it overtakes songs (+N = songs passed) and to the right when songs overtake it.", drawPulse, 14000, false],
+  ["pulse", "F · Skyline", "Every song is a grey bar: left to right = position among all songs in the period (#1 on the right; the axis stays fixed), height = plays so far. This song is the wider red bar; +N floats up when it overtakes songs.", drawPulse, 14000, false],
 ];
 const LAB_VISUALS = LAB_DEFS.map(([id, title, desc, draw, duration, hasMountain]) => {
   const card = document.createElement("section");

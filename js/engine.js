@@ -672,21 +672,29 @@
     const sampleDays = Array.from({ length: F }, (_, i) => labels[Math.round((i * (labels.length - 1)) / Math.max(1, F - 1))]);
     const counts = new Map();
     const frames = [];
+    // For the skyline: every song's plays so far, read at fixed positions (#1…#100 each, then spread out on a
+    // log scale up to the number of songs at the end), so the x-axis never changes during the animation.
+    const songsEnd = new Set(rows.map((r) => r.key)).size;
+    const at = new Set();
+    for (let r = 1; r <= Math.min(100, songsEnd); r++) at.add(r);
+    for (let s = 0; s <= 200; s++) at.add(Math.max(1, Math.round(10 ** ((s / 200) * Math.log10(Math.max(1, songsEnd))))));
+    const distRanks = [...at].sort((a, b) => a - b);
     let j = 0;
     for (const day of sampleDays) {
       while (j < rows.length && rows[j].ymd <= day) { const k = rows[j++].key; counts.set(k, (counts.get(k) || 0) + 1); }
       const sorted = [...counts].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
-      const at = sorted.findIndex(([k]) => k === key);
+      const dist = distRanks.map((r) => (r <= sorted.length ? sorted[r - 1][1] : 0));
+      const me = sorted.findIndex(([k]) => k === key);
       const rankOf = (idx) => { const n = sorted[idx][1]; let p = idx; while (p > 0 && sorted[p - 1][1] === n) p--; return p + 1; };
       // 5 above and 4 below; near the top (or bottom) the window shifts so there are always 10 rows.
-      const from = Math.max(0, Math.min(at - 5, sorted.length - 10));
+      const from = Math.max(0, Math.min(me - 5, sorted.length - 10));
       const pick = sorted.slice(from, from + 10).map(([k, n], o) => {
         const s = songIndex.byKey.get(k);
         return { key: k, track: s.track, artist: s.artist, plays: n, rank: rankOf(from + o), me: k === key };
       });
-      frames.push({ day, rank: rankOf(at), plays: sorted[at][1], songs: sorted.length, rows: pick });
+      frames.push({ day, rank: rankOf(me), plays: sorted[me][1], songs: sorted.length, rows: pick, dist });
     }
-    return { range, frames };
+    return { range, frames, distRanks, songsEnd };
   }
   // ------------------------------------------------------------------ Bar race: values per step for an animated ranking
   const weekCache = new Map();

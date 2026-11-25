@@ -37,9 +37,8 @@ const PERIOD_LABEL = {
   all: "All time", year: "This year", "365d": "Last 365 days", month: "This month", "30d": "Last 30 days",
   week: "This week", "7d": "Last 7 days", today: "Today",
 };
-const view = { b: "year", a: "today" };                         // defaults: this year + today
-try { Object.assign(view, JSON.parse(localStorage.getItem("ss-view") || "{}")); } catch {}
-if (!(LEVEL[view.a] < LEVEL[view.b])) Object.assign(view, { b: "year", a: "today" });
+// Every time the app opens: backdrop "This year", insight "This week" (changes last until you close it).
+const view = { b: "year", a: "week" };
 
 function syncPanel() {
   $("#backdrop").value = view.b;
@@ -48,7 +47,6 @@ function syncPanel() {
   $("#panelSummary").textContent = `${PERIOD_LABEL[view.b]} · + ${PERIOD_LABEL[view.a].toLowerCase()}`;
 }
 function viewChanged(backdropChanged) {
-  try { localStorage.setItem("ss-view", JSON.stringify(view)); } catch {}
   syncPanel();
   if (backdropChanged) setGranularity(autoGranularity());
   loadAll();
@@ -584,10 +582,14 @@ fullBtn.addEventListener("click", async () => {
   catch (e) { toast(e.message, 8000); }
 });
 
-// On page load: colour the button, and pick up an update that's already running.
-api("/api/refresh/status").then((s) => {
+// On page load: colour the button, pick up an update that's already running, and otherwise fetch your
+// new scrobbles straight away when Last.fm has newer ones than this device.
+api("/api/refresh/status").then(async (s) => {
   paintNewButton(s);
-  if (s.running) followUpdate(s);
+  if (s.running) { followUpdate(s); return; }
+  if (s.checked_with === "lastfm" && !s.fresh) {
+    try { followUpdate(await api("/api/refresh", { method: "POST" })); } catch (e) { toast(e.message, 8000); }
+  }
 }).catch(() => {});
 
 // ---------------------------------------------------------------- spotify status

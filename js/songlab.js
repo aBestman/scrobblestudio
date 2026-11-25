@@ -314,11 +314,13 @@ function drawPulse(v) {
   const g = prepCanvas(v.canvas, (W, narrow) => (narrow ? 300 : 320));
   if (!d || !ld || !ld.frames.length) return;
   const { ctx, W, H, narrow, muted, line, accent } = g;
-  const decades = Math.max(1, Math.log10(Math.max(10, ld.songsEnd)));
+  // Softened log scale: log(rank + 20) instead of log(rank), so the top 10 doesn't take a huge share of the width.
+  const SOFT = 20, lg0 = Math.log10(1 + SOFT), lgSpan = Math.log10(Math.max(10, ld.songsEnd) + SOFT) - lg0;
+  const decades = Math.log10(Math.max(10, ld.songsEnd));
   const topPlays = Math.max(1, ...ld.frames.at(-1).dist);
   const step = niceStep(topPlays), topV = Math.ceil(topPlays / step) * step;
   const L = narrow ? 36 : 46, R = narrow ? 16 : 24, T = narrow ? 96 : 86, B = 36;
-  const x = (r) => L + (1 - Math.log10(r) / decades) * (W - L - R);
+  const x = (r) => Math.min(W - R, L + (1 - (Math.log10(r + SOFT) - lg0) / lgSpan) * (W - L - R));
   const y = (val) => H - B - (val / topV) * (H - T - B);
 
   // Grid: plays so far, and positions
@@ -329,10 +331,13 @@ function drawPulse(v) {
     ctx.fillStyle = muted; ctx.fillText(fmt(val), L - 6, y(val));
   }
   ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  let lastLabel = -1e9;
   for (let k = Math.floor(decades); k >= 0; k--) {
-    const xx = x(10 ** k);
+    const xx = x(10 ** k), lx = Math.min(W - R - 8, Math.max(L + 12, xx));
     ctx.strokeStyle = line; ctx.beginPath(); ctx.moveTo(xx, H - B); ctx.lineTo(xx, H - B + 4); ctx.stroke();
-    ctx.fillStyle = muted; ctx.fillText(`#${fmt(10 ** k)}`, Math.min(W - R - 8, Math.max(L + 12, xx)), H - B + 16);
+    if (lx - lastLabel < 34) continue;                    // too close to the previous label (#1 next to #10 on phones)
+    ctx.fillStyle = muted; ctx.fillText(`#${fmt(10 ** k)}`, lx, H - B + 16);
+    lastLabel = lx;
   }
   ctx.textAlign = "right"; ctx.fillText(`position among all ${fmt(ld.songsEnd)} songs → #1`, W - R, H - 4);
   ctx.textAlign = "left"; ctx.fillText("plays so far", L, T - 10);
@@ -340,15 +345,15 @@ function drawPulse(v) {
   // The other songs, blended between the two nearest snapshots
   const F = ld.frames.length, ff = v.t * (F - 1), fi = Math.floor(ff), fj = Math.min(F - 1, fi + 1), fu = ff - fi;
   const A = ld.frames[fi].dist, Bv = ld.frames[fj].dist, ranks = ld.distRanks;
-  const cap = narrow ? 4 : 6;
   ctx.fillStyle = muted; ctx.globalAlpha = 0.45;
   ctx.beginPath();
   for (let s = 0; s < ranks.length; s++) {
     const val = A[s] * (1 - fu) + Bv[s] * fu;
     if (val <= 0) continue;
-    const xr = x(ranks[s]), xn = s + 1 < ranks.length ? x(ranks[s + 1]) : L, gap = xr - xn;
-    if (gap < 3) ctx.rect(xn, y(val), gap + 0.6, y(0) - y(val));          // the long tail: bars touch → an area
-    else { const w = Math.min(cap, gap * 0.6); ctx.rect(xr - w / 2, y(val), w, y(0) - y(val)); }
+    // Each bar fills its whole slot: from halfway to the next-better song to halfway to the next sampled one,
+    // so there are no gaps between bars.
+    const right = x(ranks[s] - 0.5), left = s + 1 < ranks.length ? x(ranks[s + 1] - 0.5) : L;
+    ctx.rect(left, y(val), right - left + 0.4, y(0) - y(val));
   }
   ctx.fill(); ctx.globalAlpha = 1;
 
@@ -398,6 +403,7 @@ const LAB_VISUALS = LAB_DEFS.map(([id, title, desc, draw, duration, hasMountain]
     <canvas class="lab-canvas" id="lab-${id}"></canvas>
     <div class="player">
       <input type="range" class="scrub" min="0" max="1000" value="1000" aria-label="Position in time">
+      <div class="player-date" aria-live="off"></div>
       <div class="player-controls">
         <button class="icon-btn" type="button" data-act="play"></button>
         <button class="icon-btn ghost" type="button" data-act="restart" title="Restart">${ICONS.restart}</button>
@@ -406,7 +412,13 @@ const LAB_VISUALS = LAB_DEFS.map(([id, title, desc, draw, duration, hasMountain]
   $("#labBody").appendChild(card);
   const v = { id, t: 1, playing: false, last: 0, raf: 0, dragging: false, duration, mountain: hasMountain, canvas: card.querySelector("canvas") };
   const play = card.querySelector('[data-act="play"]'), scrub = card.querySelector(".scrub");
-  v.draw = () => { if (!$("#labBody").hidden) draw(v); if (!v.dragging) scrub.value = Math.round(v.t * 1000); };
+  const dateEl = card.querySelector(".player-date");
+  v.draw = () => {
+    if (!$("#labBody").hidden) draw(v);
+    if (!v.dragging) scrub.value = Math.round(v.t * 1000);
+    const L = lab.rank && lab.rank.labels;                // the date you are at, as "Mmm YYYY"
+    dateEl.textContent = L ? `${MON3S[Number(L[Math.round(v.t * (L.length - 1))].slice(5, 7)) - 1]} ${L[Math.round(v.t * (L.length - 1))].slice(0, 4)}` : "";
+  };
   const tick = (now) => {
     const dt = v.last ? now - v.last : 16; v.last = now;
     v.t = Math.min(1, v.t + dt / v.duration);

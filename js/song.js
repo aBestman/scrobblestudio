@@ -195,13 +195,18 @@ function header(g, big, red, sub) {
 // Every song as a grey bar: left-right = position (#1 on the right, log scale over ALL songs in the period, so
 // the axis never moves), height = its plays so far. This song is the wider red bar. When it overtakes songs,
 // a small "+N" floats up from it.
-function drawSkyline(canvas, d, ld, t, duration) {
+// scale: 0 = linear x-axis … 1 = strongly logarithmic (default ≈ log(rank + 20) for songs).
+const SKY_SCALE_DEFAULT = 0.72;
+function drawSkyline(canvas, d, ld, t, duration, scale = SKY_SCALE_DEFAULT) {
   t = Math.min(1, Math.max(0, t));
   const g = prepCanvas(canvas, (W, narrow) => (narrow ? 300 : 320));
   if (!d || !ld || !ld.frames.length) return;
   const { ctx, W, H, narrow, muted, line, accent } = g;
-  // Softened log scale: log(rank + 20) instead of log(rank), so the top 10 doesn't take a huge share of the width.
-  const SOFT = 20, lg0 = Math.log10(1 + SOFT), lgSpan = Math.log10(Math.max(10, ld.songsEnd) + SOFT) - lg0;
+  // x uses log(rank + SOFT): a huge SOFT is practically linear, a tiny one is a pure log scale.
+  // The slider slides log10(SOFT) smoothly from (log10(count) + 3) down to -1.
+  const nAll = Math.max(10, ld.songsEnd), s = Math.min(1, Math.max(0, scale));
+  const SOFT = 10 ** ((Math.log10(nAll) + 3) * (1 - s) - s);
+  const lg0 = Math.log10(1 + SOFT), lgSpan = Math.log10(nAll + SOFT) - lg0;
   const decades = Math.log10(Math.max(10, ld.songsEnd));
   const topPlays = Math.max(1, ...ld.frames.at(-1).dist);
   const step = niceStep(topPlays), topV = Math.ceil(topPlays / step) * step;
@@ -217,14 +222,17 @@ function drawSkyline(canvas, d, ld, t, duration) {
     ctx.fillStyle = muted; ctx.fillText(fmt(val), L - 6, y(val));
   }
   ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
-  let lastLabel = -1e9;
-  for (let k = Math.floor(decades); k >= 0; k--) {
-    const xx = x(10 ** k), lx = Math.min(W - R - 8, Math.max(L + 12, xx));
+  // Position labels: #1, #10, #100 … first, then #2/#5 × 10ⁿ where there's room (handy on a near-linear axis).
+  const placed = [];
+  const tick = (r) => {
+    const xx = x(r), lx = Math.min(W - R - 8, Math.max(L + 12, xx)), w = ctx.measureText(`#${fmt(r)}`).width;
+    if (placed.some(([p, pw]) => Math.abs(p - lx) < (pw + w) / 2 + 8)) return;   // would overlap a label
+    placed.push([lx, w]);
     ctx.strokeStyle = line; ctx.beginPath(); ctx.moveTo(xx, H - B); ctx.lineTo(xx, H - B + 4); ctx.stroke();
-    if (lx - lastLabel < 34) continue;                    // too close to the previous label (#1 next to #10 on phones)
-    ctx.fillStyle = muted; ctx.fillText(`#${fmt(10 ** k)}`, lx, H - B + 16);
-    lastLabel = lx;
-  }
+    ctx.fillStyle = muted; ctx.fillText(`#${fmt(r)}`, lx, H - B + 16);
+  };
+  for (let k = Math.floor(decades); k >= 0; k--) tick(10 ** k);
+  for (const m of [5, 2]) for (let k = Math.floor(decades); k >= 0; k--) if (m * 10 ** k <= ld.songsEnd) tick(m * 10 ** k);
   ctx.textAlign = "right"; ctx.fillText(`position among all ${fmt(ld.songsEnd)} ${NOUNS[ld.kind || "song"]} → #1`, W - R, H - 4);
   ctx.textAlign = "left"; ctx.fillText("plays so far", L, T - 10);
 
@@ -291,12 +299,29 @@ async function loadSongRank() {
 // The skyline: every song as a grey bar (plays so far, at its position), this song as the wide red bar.
 function drawSong() {
   // (the last value = how long the whole timeline takes at regular speed, so "+N" labels last ~0.7 s)
-  drawSkyline($("#songCanvas"), sd.rank, sd.ladder, sd.t, sd.rank ? msPerDay() * Math.max(1, sd.rank.labels.length - 1) : 14000);
+  drawSkyline($("#songCanvas"), sd.rank, sd.ladder, sd.t, sd.rank ? msPerDay() * Math.max(1, sd.rank.labels.length - 1) : 14000, skyScale());
   if (!sd.dragging) $("#songScrub").value = Math.round(sd.t * 1000);
   const L = sd.rank && sd.rank.labels;                    // the date you're at, as "Mmm YYYY"
   $("#songDate").textContent = L ? monthYear(L[Math.round(sd.t * (L.length - 1))]) : "";
 }
-const monthYear = (ymd) => `${MON3S[Number(ymd.slice(5, 7)) - 1]} ${ymd.slice(0, 4)}`;
+// Linear ↔ log slider for the skyline's position axis, remembered separately for artists, songs and albums.
+const skyScales = {};
+function skyScale() {
+  if (!(sd.kind in skyScales)) {
+    let v = null;
+    try { v = localStorage.getItem("ss-sky-scale-" + sd.kind); } catch {}
+    skyScales[sd.kind] = v !== null && Number.isFinite(Number(v)) ? Number(v) : SKY_SCALE_DEFAULT;
+  }
+  const s = skyScales[sd.kind], want = String(Math.round(s * 1000));
+  if ($("#skyScale").value !== want) $("#skyScale").value = want;
+  return s;
+}
+$("#skyScale").addEventListener("input", (e) => {
+  skyScales[sd.kind] = Number(e.target.value) / 1000;
+  try { localStorage.setItem("ss-sky-scale-" + sd.kind, String(skyScales[sd.kind])); } catch {}
+  drawSong();
+});
+const monthYear =(ymd) => `${MON3S[Number(ymd.slice(5, 7)) - 1]} ${ymd.slice(0, 4)}`;
 
 function tickSong(now) {
   const dt = sd.last ? now - sd.last : 16;

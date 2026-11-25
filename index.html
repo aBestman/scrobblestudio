@@ -8,9 +8,9 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=22">
+  <link rel="stylesheet" href="style.css?v=23">
   <!-- Chart.js 4.4.1 (official npm release), stored in this repository so no outside code runs in the app -->
-  <script src="js/chart.umd.min.js?v=22"></script>
+  <script src="js/chart.umd.min.js?v=23"></script>
 </head>
 <body>
   <div class="sticky-top">
@@ -334,6 +334,11 @@
             </div>
           </div>
           <canvas id="songCanvas" aria-label="Skyline: every song's plays so far by position, this song in red"></canvas>
+          <label class="scale-row" title="How strongly the position axis is stretched: linear on the left, strongly logarithmic on the right (remembered separately for artists, songs and albums)">
+            <span>Linear</span>
+            <input type="range" id="skyScale" min="0" max="1000" value="720" aria-label="Position axis: linear to logarithmic">
+            <span>Log</span>
+          </label>
           <div class="player">
             <input type="range" class="scrub" id="songScrub" min="0" max="1000" value="1000" aria-label="Position in time">
             <div class="player-date" id="songDate"></div>
@@ -395,11 +400,11 @@
   </div>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="js/engine.js?v=22"></script>
-  <script src="js/nav.js?v=22"></script>
-  <script src="js/app.js?v=22"></script>
-  <script src="js/race.js?v=22"></script>
-  <script src="js/song.js?v=22"></script>
-  <script src="js/songlab.js?v=22"></script>
+  <script src="js/engine.js?v=23"></script>
+  <script src="js/nav.js?v=23"></script>
+  <script src="js/app.js?v=23"></script>
+  <script src="js/race.js?v=23"></script>
+  <script src="js/song.js?v=23"></script>
+  <script src="js/songlab.js?v=23"></script>
 </body>
 </html>

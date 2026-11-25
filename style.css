@@ -480,3 +480,8 @@ label.wide input { flex: 1; }
 /* Deep Dive skyline: linear ↔ log slider for the position axis */
 .scale-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 12px; color: var(--muted); }
 .scale-row input { flex: 1; max-width: 320px; accent-color: var(--muted); height: 18px; cursor: pointer; }
+
+/* Deep Dive: animation length slider next to play/pause */
+.len-field { display: flex; align-items: center; gap: 8px; margin-left: 8px; font-size: 12px; color: var(--muted); flex: 1; max-width: 280px; }
+.len-field input { flex: 1; min-width: 60px; accent-color: var(--muted); height: 18px; cursor: pointer; }
+.len-field b { color: var(--text); font-size: 13px; min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }

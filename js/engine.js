@@ -612,14 +612,14 @@
     const together = [...tally].sort((a, b) => b[1].times - a[1].times || b[1].plays - a[1].plays).slice(0, 5)
       .map(([k, e]) => ({ ...itemOf(kind, k), times: e.times, of: idx.length }));
 
-    // The three linked items you can swipe between: the song (for an artist or album: its most played song),
-    // that song's artist, and its album (for an album: itself).
+    // The three linked items you can swipe between. A song: its artist and its album. An artist: its most
+    // played song and its most played album. An album: its most played song and its artist.
     const songK = kind === "song" ? s.key : mostCommon(plays.map((r) => r.key));
     const songRows = kind === "song" ? plays : E.rows.filter((r) => r.key === songK);
     const links = {
       song: songK,
       artist: kind === "artist" ? s.key : songRows[0].artist,
-      album: kind === "album" ? s.key : mostCommon(songRows.map(albumOf)),
+      album: kind === "album" ? s.key : mostCommon((kind === "artist" ? plays : songRows).map(albumOf)),
     };
     const fmtTime = (r) => `${r.ymd} ${pad(r.hh)}:${pad(r.mi)}`;
     return {

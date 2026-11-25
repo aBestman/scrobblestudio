@@ -7,15 +7,19 @@ const DIVE_ORDER = ["artist", "song", "album"];
 const NOUN = { artist: "artist", song: "song", album: "album" }, NOUNS = { artist: "artists", song: "songs", album: "albums" };
 const MON3S = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const niceDate = (ymd) => { const [y, m, d] = ymd.split("-"); return `${Number(d)} ${MON3S[m - 1]} ${y}`; };
-const songDuration = () => ({ all: 14000, year: 9000, month: 6000 }[sd.range]);
-// Regular speed in ms per day. Year and month: the whole period in 9 s / 6 s. All time: your whole history
-// in 14 s, but the part from the first play takes at least 6 s.
-function msPerDay() {
-  const d = sd.rank, N = Math.max(2, d ? d.labels.length : 2);
-  if (sd.range !== "all") return songDuration() / N;
-  const after = Math.max(1, N - Math.max(0, d.firstIdx));
-  return Math.max(14000 / N, 6000 / after);
+// Animation length (10–60 s, set with the slider next to play/pause; remembered on this device).
+let animSec = 15;
+try { const v = Number(localStorage.getItem("ss-anim-sec")); if (v >= 10 && v <= 60) animSec = v; } catch {}
+// Speed in ms per day. The whole animation takes animSec. All time: the days before the first play run 5×
+// faster (but take at most a fifth of the time, so a recently found song still gets most of it).
+function timing() {
+  const d = sd.rank, days = Math.max(1, (d ? d.labels.length : 2) - 1), D = animSec * 1000;
+  if (!d || sd.range !== "all" || d.firstIdx <= 0) return { pre: D / days, post: D / days };
+  const P = d.firstIdx, Q = Math.max(1, days - P);
+  const runUp = Math.min((D * (P / 5)) / (P / 5 + Q), D / 5);
+  return { pre: runUp / P, post: (D - runUp) / Q };
 }
+const msPerDay = () => timing().post;
 
 // ---------------------------------------------------------------- search
 let searchTimer;
@@ -389,15 +393,20 @@ $("#skyScale").addEventListener("input", (e) => {
 });
 const monthYear =(ymd) => `${MON3S[Number(ymd.slice(5, 7)) - 1]} ${ymd.slice(0, 4)}`;
 
+$("#songLen").value = animSec;
+$("#songLenVal").textContent = `${animSec} s`;
+$("#songLen").addEventListener("input", (e) => {         // takes effect right away, also while playing
+  animSec = Number(e.target.value);
+  $("#songLenVal").textContent = `${animSec} s`;
+  try { localStorage.setItem("ss-anim-sec", String(animSec)); } catch {}
+});
 function tickSong(now) {
   const dt = sd.last ? now - sd.last : 16;
   sd.last = now;
-  // Walk through the days: All time runs 5× faster until the song's first play, then at regular speed.
-  const d = sd.rank, N = d.labels.length;
+  // Walk through the days: fast until the first play (All time), then at regular speed.
+  const d = sd.rank, N = d.labels.length, tm = timing();
   const fast = sd.range === "all" && d.firstIdx > 0 && sd.t * (N - 1) < d.firstIdx;
-  // (the run-up never takes more than 3 s: for a song you found recently it goes faster than 5×)
-  const boost = fast ? Math.max(5, (d.firstIdx * msPerDay()) / 3000) : 1;
-  sd.t = Math.min(1, sd.t + (dt / msPerDay()) * boost / Math.max(1, N - 1));
+  sd.t = Math.min(1, sd.t + dt / (fast ? tm.pre : tm.post) / Math.max(1, N - 1));
   drawSong();
   if (sd.t >= 1) { pauseSong(); return; }
   sd.raf = requestAnimationFrame(tickSong);

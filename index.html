@@ -8,9 +8,9 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=24">
+  <link rel="stylesheet" href="style.css?v=25">
   <!-- Chart.js 4.4.1 (official npm release), stored in this repository so no outside code runs in the app -->
-  <script src="js/chart.umd.min.js?v=24"></script>
+  <script src="js/chart.umd.min.js?v=25"></script>
 </head>
 <body>
   <div class="sticky-top">
@@ -346,6 +346,11 @@
             <div class="player-controls">
               <button class="icon-btn" id="songPlay" type="button" aria-label="Play"></button>
               <button class="icon-btn ghost" id="songRestart" type="button" aria-label="Restart"></button>
+              <label class="len-field" title="How long the whole animation takes (10–60 seconds)">
+                <span>Length</span>
+                <input type="range" id="songLen" min="10" max="60" step="1" value="15" aria-label="Animation length in seconds">
+                <b id="songLenVal">15 s</b>
+              </label>
             </div>
           </div>
         </section>
@@ -401,11 +406,11 @@
   </div>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="js/engine.js?v=24"></script>
-  <script src="js/nav.js?v=24"></script>
-  <script src="js/app.js?v=24"></script>
-  <script src="js/race.js?v=24"></script>
-  <script src="js/song.js?v=24"></script>
-  <script src="js/songlab.js?v=24"></script>
+  <script src="js/engine.js?v=25"></script>
+  <script src="js/nav.js?v=25"></script>
+  <script src="js/app.js?v=25"></script>
+  <script src="js/race.js?v=25"></script>
+  <script src="js/song.js?v=25"></script>
+  <script src="js/songlab.js?v=25"></script>
 </body>
 </html>

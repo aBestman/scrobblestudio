@@ -258,7 +258,7 @@ function drawLadder(v) {
     ctx.textAlign = "left"; ctx.fillStyle = muted; ctx.font = `12px ${LAB_FONT}`;
     ctx.fillText(fmt(r.plays), labelW + w + 6, y + (rowH - 8) / 2);
   });
-  header(g, `#${fmt(fr.rank)}`, `${fmt(fr.plays)} plays · of ${fmt(fr.songs)} songs`, `${niceDate(fr.day)} · the 5 songs just above it and 4 just below`);
+  header(g, fr.rank === null ? "–" : `#${fmt(fr.rank)}`, `${fmt(fr.plays)} plays · of ${fmt(fr.songs)} songs`, `${niceDate(fr.day)} · the 5 songs just above it and 4 just below`);
 }
 
 // ---------------------------------------------------------------- D: year rings (seasons)

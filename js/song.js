@@ -5,6 +5,14 @@ const sd = { key: null, info: null, rank: null, ladder: null, range: "all", t: 1
 const MON3S = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const niceDate = (ymd) => { const [y, m, d] = ymd.split("-"); return `${Number(d)} ${MON3S[m - 1]} ${y}`; };
 const songDuration = () => ({ all: 14000, year: 9000, month: 6000 }[sd.range]);
+// Regular speed in ms per day. Year and month: the whole period in 9 s / 6 s. All time: your whole history
+// in 14 s, but the part from the song's first play takes at least 6 s.
+function msPerDay() {
+  const d = sd.rank, N = Math.max(2, d ? d.labels.length : 2);
+  if (sd.range !== "all") return songDuration() / N;
+  const after = Math.max(1, N - Math.max(0, d.firstIdx));
+  return Math.max(14000 / N, 6000 / after);
+}
 
 // ---------------------------------------------------------------- search
 let searchTimer;
@@ -128,6 +136,7 @@ function header(g, big, red, sub) {
 // the axis never moves), height = its plays so far. This song is the wider red bar. When it overtakes songs,
 // a small "+N" floats up from it.
 function drawSkyline(canvas, d, ld, t, duration) {
+  t = Math.min(1, Math.max(0, t));
   const g = prepCanvas(canvas, (W, narrow) => (narrow ? 300 : 320));
   if (!d || !ld || !ld.frames.length) return;
   const { ctx, W, H, narrow, muted, line, accent } = g;
@@ -221,7 +230,8 @@ async function loadSongRank() {
 
 // The skyline: every song as a grey bar (plays so far, at its position), this song as the wide red bar.
 function drawSong() {
-  drawSkyline($("#songCanvas"), sd.rank, sd.ladder, sd.t, songDuration());
+  // (the last value = how long the whole timeline takes at regular speed, so "+N" labels last ~0.7 s)
+  drawSkyline($("#songCanvas"), sd.rank, sd.ladder, sd.t, sd.rank ? msPerDay() * Math.max(1, sd.rank.labels.length - 1) : 14000);
   if (!sd.dragging) $("#songScrub").value = Math.round(sd.t * 1000);
   const L = sd.rank && sd.rank.labels;                    // the date you're at, as "Mmm YYYY"
   $("#songDate").textContent = L ? monthYear(L[Math.round(sd.t * (L.length - 1))]) : "";
@@ -231,7 +241,12 @@ const monthYear = (ymd) => `${MON3S[Number(ymd.slice(5, 7)) - 1]} ${ymd.slice(0,
 function tickSong(now) {
   const dt = sd.last ? now - sd.last : 16;
   sd.last = now;
-  sd.t = Math.min(1, sd.t + dt / songDuration());
+  // Walk through the days: All time runs 5× faster until the song's first play, then at regular speed.
+  const d = sd.rank, N = d.labels.length;
+  const fast = sd.range === "all" && d.firstIdx > 0 && sd.t * (N - 1) < d.firstIdx;
+  // (the run-up never takes more than 3 s: for a song you found recently it goes faster than 5×)
+  const boost = fast ? Math.max(5, (d.firstIdx * msPerDay()) / 3000) : 1;
+  sd.t = Math.min(1, sd.t + (dt / msPerDay()) * boost / Math.max(1, N - 1));
   drawSong();
   if (sd.t >= 1) { pauseSong(); return; }
   sd.raf = requestAnimationFrame(tickSong);

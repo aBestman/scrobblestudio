@@ -603,10 +603,11 @@
     const rows = E.rows.filter((r) => r.ymd >= start);
     if (!rows.length) fail("No scrobbles in this period.");
     const today = ymdLocal(new Date());
-    // The timeline starts at the song's first play in this period (all songs are still counted from the start).
+    // The timeline covers the whole period: from your very first scrobble (All time) or the 1st of the
+    // year/month, up to today. firstIdx = the day of the song's first play in it (-1 if not played).
     const firstPlay = rows.find((r) => r.key === key);
-    if (!firstPlay) fail("This song wasn't played in this period.");
-    const labels = periodRange("day", firstPlay.ymd, today);
+    const labels = periodRange("day", range === "all" ? rows[0].ymd : start, today);
+    const firstIdx = firstPlay ? labels.indexOf(firstPlay.ymd) : -1;
     const counts = new Map(), freq = new Map();   // freq: how many songs have exactly n plays
     let c = 0, ahead = 0, j = 0;
     const rank = [], plays = [], total = [];
@@ -618,7 +619,6 @@
       freq.set(now, (freq.get(now) || 0) + 1);
       counts.set(k, now);
     };
-    while (j < rows.length && rows[j].ymd < firstPlay.ymd) add(rows[j++].key);   // everything before the first play
     for (const day of labels) {
       while (j < rows.length && rows[j].ymd === day) add(rows[j++].key);
       rank.push(c ? ahead + 1 : null);
@@ -640,7 +640,7 @@
       while (outW < inW && dayNum(days[outW]) <= dn - windowDays) sum -= perDay.get(days[outW++]);
       rolling.push(sum);
     }
-    return { range, labels, rank, plays, total, rolling, months };
+    return { range, labels, rank, plays, total, rolling, months, firstIdx };
   }
 
   // Year rings: for each day since the first play, this song's plays in a window around that day:
@@ -665,9 +665,8 @@
     const range = ["year", "month"].includes(q.get("range")) ? q.get("range") : "all";
     const start = range === "all" ? "0000-01-01" : periodStart(range);
     const rows = E.rows.filter((r) => r.ymd >= start);
-    const firstPlay = rows.find((r) => r.key === key);
-    if (!firstPlay) fail("This song wasn't played in this period.");
-    const labels = periodRange("day", firstPlay.ymd, ymdLocal(new Date()));
+    if (!rows.length) fail("No scrobbles in this period.");
+    const labels = periodRange("day", range === "all" ? rows[0].ymd : start, ymdLocal(new Date()));
     const F = Math.min(200, labels.length);
     const sampleDays = Array.from({ length: F }, (_, i) => labels[Math.round((i * (labels.length - 1)) / Math.max(1, F - 1))]);
     const counts = new Map();
@@ -687,12 +686,12 @@
       const me = sorted.findIndex(([k]) => k === key);
       const rankOf = (idx) => { const n = sorted[idx][1]; let p = idx; while (p > 0 && sorted[p - 1][1] === n) p--; return p + 1; };
       // 5 above and 4 below; near the top (or bottom) the window shifts so there are always 10 rows.
-      const from = Math.max(0, Math.min(me - 5, sorted.length - 10));
+      const from = me < 0 ? 0 : Math.max(0, Math.min(me - 5, sorted.length - 10));   // not played yet: the top 10
       const pick = sorted.slice(from, from + 10).map(([k, n], o) => {
         const s = songIndex.byKey.get(k);
         return { key: k, track: s.track, artist: s.artist, plays: n, rank: rankOf(from + o), me: k === key };
       });
-      frames.push({ day, rank: rankOf(me), plays: sorted[me][1], songs: sorted.length, rows: pick, dist });
+      frames.push({ day, rank: me < 0 ? null : rankOf(me), plays: me < 0 ? 0 : sorted[me][1], songs: sorted.length, rows: pick, dist });
     }
     return { range, frames, distRanks, songsEnd };
   }

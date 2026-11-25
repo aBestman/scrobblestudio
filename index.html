@@ -8,9 +8,9 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=20">
+  <link rel="stylesheet" href="style.css?v=21">
   <!-- Chart.js 4.4.1 (official npm release), stored in this repository so no outside code runs in the app -->
-  <script src="js/chart.umd.min.js?v=20"></script>
+  <script src="js/chart.umd.min.js?v=21"></script>
 </head>
 <body>
   <div class="sticky-top">
@@ -332,7 +332,6 @@
               <button data-range="all">All time</button><button data-range="year">This year</button><button data-range="month">This month</button>
             </div>
           </div>
-          <p class="hint" style="margin-top:0">Every song is a grey bar: left to right = position (#1 on the right), height = plays so far. This song is the wider red bar; +N floats up when it overtakes songs.</p>
           <canvas id="songCanvas" aria-label="Skyline: every song's plays so far by position, this song in red"></canvas>
           <div class="player">
             <input type="range" class="scrub" id="songScrub" min="0" max="1000" value="1000" aria-label="Position in time">
@@ -350,7 +349,6 @@
               <input type="number" id="ringHalf" min="0" max="12" step="1" value="1">
             </label>
           </div>
-          <p class="hint" style="margin-top:0">One ring per year around the calendar (January at the top); further out = more plays in a window around that date. 1 month before and after = a 3-month window. When it finishes, each year fills in lightly, so spots where many years overlap look darker: your habits.</p>
           <canvas id="ringCanvas" class="lab-canvas" aria-label="Year rings: plays around each date, one ring per year"></canvas>
           <div class="player">
             <input type="range" class="scrub" id="ringScrub" min="0" max="1000" value="1000" aria-label="Position in time">
@@ -395,11 +393,11 @@
   </div>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="js/engine.js?v=20"></script>
-  <script src="js/nav.js?v=20"></script>
-  <script src="js/app.js?v=20"></script>
-  <script src="js/race.js?v=20"></script>
-  <script src="js/song.js?v=20"></script>
-  <script src="js/songlab.js?v=20"></script>
+  <script src="js/engine.js?v=21"></script>
+  <script src="js/nav.js?v=21"></script>
+  <script src="js/app.js?v=21"></script>
+  <script src="js/race.js?v=21"></script>
+  <script src="js/song.js?v=21"></script>
+  <script src="js/songlab.js?v=21"></script>
 </body>
 </html>

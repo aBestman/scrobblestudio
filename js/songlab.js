@@ -133,53 +133,72 @@ function agingPath(ctx, accent, count, upto, fadeSteps, point) {
   ctx.globalAlpha = 1;
 }
 
-// ---------------------------------------------------------------- B + E: moving bar (E = as now, B = with mountain outline)
-function drawMovingBar(v, withMountain) {
+// ---------------------------------------------------------------- B + C: moving bar, normal and flipped
+// B: left-right = position (#1 right), height = rolling plays.  C (flipped): up-down = position (#1 top),
+// left-right = rolling plays. Both can show the "mountain": the furthest the rolling total reached at each position.
+function drawMovingBar(v, flipped) {
   const d = lab.rank;
-  const g = prepCanvas(v.canvas, (W, narrow) => (narrow ? 320 : 340));
+  const g = prepCanvas(v.canvas, (W, narrow) => (flipped ? (narrow ? 400 : 440) : (narrow ? 320 : 340)));
   if (!d) return;
   const { ctx, W, H, narrow, muted, line, accent } = g;
   const known = d.rank.filter((r) => r !== null);
   if (!known.length) return;
   const decades = Math.max(1, Math.ceil(Math.log10(Math.max(2, ...known))));
   const step = niceStep(Math.max(1, ...d.rolling)), top = Math.ceil(Math.max(1, ...d.rolling) / step) * step;
-  const L = narrow ? 36 : 46, R = narrow ? 12 : 20, T = narrow ? 86 : 74, B = 36;
-  const x = (r) => L + (1 - Math.log10(r) / decades) * (W - L - R);
-  const y = (val) => H - B - (val / top) * (H - T - B);
+  const L = flipped ? (narrow ? 48 : 58) : (narrow ? 36 : 46), R = narrow ? 14 : 22, T = narrow ? 86 : 74, B = 36;
+  const pw = W - L - R, ph = H - T - B;
+  // rp: position along the rank axis (0 = worst shown, 1 = #1); vp: rolling plays as 0..1
+  const rp = (r) => 1 - Math.log10(r) / decades, vp = (val) => val / top;
+  // point(rank position, value position) → screen
+  const point = flipped ? (a, b) => [L + b * pw, H - B - a * ph] : (a, b) => [L + a * pw, H - B - b * ph];
 
   ctx.font = `11px ${LAB_FONT}`; ctx.lineWidth = 1;
-  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  // Value grid (rolling plays)
   for (let val = 0; val <= top; val += step) {
-    ctx.strokeStyle = line; ctx.beginPath(); ctx.moveTo(L, y(val)); ctx.lineTo(W - R, y(val)); ctx.stroke();
-    ctx.fillStyle = muted; ctx.fillText(fmt(val), L - 6, y(val));
+    const [x1, y1] = point(0, vp(val)), [x2, y2] = point(1, vp(val));
+    ctx.strokeStyle = line; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.fillStyle = muted;
+    if (flipped) { ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText(fmt(val), x1, H - B + 16); }
+    else { ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText(fmt(val), L - 6, y1); }
   }
-  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
-  for (let k = decades; k >= 0; k--) ctx.fillText(`#${fmt(10 ** k)}`, Math.min(W - R - 8, Math.max(L + 12, x(10 ** k))), H - B + 16);
-  ctx.textAlign = "right"; ctx.fillText("position → #1", W - R, H - 4);
+  // Rank ticks (#1,000 … #1)
+  for (let k = decades; k >= 0; k--) {
+    const [x, y] = point(rp(10 ** k), 0);
+    ctx.fillStyle = muted;
+    if (flipped) {
+      ctx.strokeStyle = line; ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(W - R, y); ctx.stroke();
+      ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText(`#${fmt(10 ** k)}`, L - 6, y);
+    } else {
+      ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+      ctx.fillText(`#${fmt(10 ** k)}`, Math.min(W - R - 8, Math.max(L + 12, x)), H - B + 16);
+    }
+  }
+  ctx.textAlign = "right"; ctx.textBaseline = "alphabetic"; ctx.fillStyle = muted;
+  ctx.fillText(flipped ? `plays in the ${windowWord(d.months)} →` : "position → #1", W - R, H - 4);
 
   const a = labAt(d, v.t);
-  const pt = (k) => (d.rank[k] === null ? null : [x(d.rank[k]), y(d.rolling[k])]);
+  const pt = (k) => (d.rank[k] === null ? null : point(rp(d.rank[k]), vp(d.rolling[k])));
 
-  if (withMountain) {
-    // Skyline: for each slice of the position axis, the highest rolling total reached there so far.
-    const plotW = W - L - R, NB = Math.max(60, Math.round(plotW / 3)), env = new Array(NB).fill(0);
+  if (v.mountain) {
+    // For each slice of the rank axis: the highest rolling total reached there so far.
+    const NB = Math.max(60, Math.round((flipped ? ph : pw) / 3)), env = new Array(NB).fill(0);
     for (let k = 0; k <= a.i; k++) {
-      const p = pt(k); if (!p) continue;
-      const b = Math.min(NB - 1, Math.max(0, Math.floor(((p[0] - L) / plotW) * NB)));
+      if (d.rank[k] === null) continue;
+      const b = Math.min(NB - 1, Math.max(0, Math.floor(rp(d.rank[k]) * NB)));
       if (d.rolling[k] > env[b]) env[b] = d.rolling[k];
     }
     const used = env.map((e, b) => [b, e]).filter(([, e]) => e > 0);
     if (used.length) {
-      const bx = (b) => L + ((b + 0.5) / NB) * plotW;
+      const at = (b, e) => point((b + 0.5) / NB, vp(e));
       ctx.beginPath();
-      ctx.moveTo(bx(used[0][0]), y(0));
-      used.forEach(([b, e]) => ctx.lineTo(bx(b), y(e)));
-      ctx.lineTo(bx(used.at(-1)[0]), y(0));
+      ctx.moveTo(...at(used[0][0], 0));
+      used.forEach(([b, e]) => ctx.lineTo(...at(b, e)));
+      ctx.lineTo(...at(used.at(-1)[0], 0));
       ctx.closePath();
       ctx.fillStyle = accent; ctx.globalAlpha = 0.12; ctx.fill(); ctx.globalAlpha = 1;
       if (v.t >= 1) {                                       // finished: highlight the mountain outline
         ctx.beginPath();
-        used.forEach(([b, e], n) => (n ? ctx.lineTo(bx(b), y(e)) : ctx.moveTo(bx(b), y(e))));
+        used.forEach(([b, e], n) => (n ? ctx.lineTo(...at(b, e)) : ctx.moveTo(...at(b, e))));
         ctx.strokeStyle = accent; ctx.lineWidth = 2.5; ctx.globalAlpha = 0.9; ctx.stroke(); ctx.globalAlpha = 1;
       }
     }
@@ -187,9 +206,13 @@ function drawMovingBar(v, withMountain) {
 
   agingPath(ctx, accent, a.N, a.i, Math.max(5, Math.min(365, Math.round(a.N * 0.12))), pt);
   if (a.r !== null) {
-    const bw = narrow ? 10 : 14;
+    const bw = narrow ? 10 : 14, [x, y] = point(rp(a.r), vp(a.v)), [x0, y0] = point(rp(a.r), 0);
     ctx.fillStyle = accent; ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(x(a.r) - bw / 2, y(a.v), bw, Math.max(2, y(0) - y(a.v)), [4, 4, 0, 0]) : ctx.rect(x(a.r) - bw / 2, y(a.v), bw, y(0) - y(a.v));
+    if (flipped) {                                          // horizontal bar from the left axis
+      ctx.roundRect ? ctx.roundRect(x0, y - bw / 2, Math.max(2, x - x0), bw, [0, 4, 4, 0]) : ctx.rect(x0, y - bw / 2, x - x0, bw);
+    } else {                                                // vertical bar from the bottom axis
+      ctx.roundRect ? ctx.roundRect(x - bw / 2, y, bw, Math.max(2, y0 - y), [4, 4, 0, 0]) : ctx.rect(x - bw / 2, y, bw, y0 - y);
+    }
     ctx.fill();
   }
   const rk = d.rank[a.k];
@@ -333,17 +356,20 @@ function drawRings(v) {
 }
 
 // ---------------------------------------------------------------- visuals + their own players
+// [id, title, description, draw, duration ms, has "Mountain outline" switch]
 const LAB_DEFS = [
-  ["stack", "A · Stacked charts", "Rank (top) and rolling plays (bottom) on one shared timeline; the dashed line is the moment you're at.", drawStacked, 14000],
-  ["mountain", "B · Mountain", "Like the current visual, plus a soft 'skyline' of the highest rolling total reached at each position. Its outline lights up when the animation finishes.", (v) => drawMovingBar(v, true), 14000],
-  ["ladder", "C · Neighbours ladder (idea)", "The song with the 5 songs just above and 4 just below it in your all-time ranking: watch who it overtakes.", drawLadder, 16000],
-  ["rings", "D · Year rings (idea)", "One ring per year around the months (January at the top); further out = more plays in the rolling window. Shows seasonal habits. Try 1–3 rolling months.", drawRings, 16000],
-  ["current", "E · Current visual", "What the Song deep dive page shows now, for comparison.", (v) => drawMovingBar(v, false), 14000],
+  ["stack", "A · Stacked charts", "Rank (top) and rolling plays (bottom) on one shared timeline; the dashed line is the moment you're at.", drawStacked, 14000, false],
+  ["bar", "B · Moving bar", "Left to right = position (#1 on the right), height = plays in the rolling window. The switch adds the 'mountain': the highest total reached at each position, outlined when the animation finishes.", (v) => drawMovingBar(v, false), 14000, true],
+  ["flip", "C · Moving bar, flipped", "Same as B with the axes swapped: up/down = position (#1 at the top), left to right = plays in the rolling window.", (v) => drawMovingBar(v, true), 14000, true],
+  ["ladder", "D · Neighbours ladder (idea)", "The song with the 5 songs just above and 4 just below it in your all-time ranking: watch who it overtakes.", drawLadder, 16000, false],
+  ["rings", "E · Year rings (idea)", "One ring per year around the months (January at the top); further out = more plays in the rolling window. Shows seasonal habits. Try 1–3 rolling months.", drawRings, 16000, false],
 ];
-const LAB_VISUALS = LAB_DEFS.map(([id, title, desc, draw, duration]) => {
+const LAB_VISUALS = LAB_DEFS.map(([id, title, desc, draw, duration, hasMountain]) => {
   const card = document.createElement("section");
   card.className = "card";
-  card.innerHTML = `<div class="card-head"><h2>${esc(title)}</h2></div><p class="hint" style="margin-top:0">${esc(desc)}</p>
+  card.innerHTML = `<div class="card-head chart-head"><h2>${esc(title)}</h2>${hasMountain
+    ? '<label class="switch" title="Show the highest rolling total reached at each position"><input type="checkbox" data-act="mountain" checked> Mountain outline</label>' : ""}</div>
+    <p class="hint" style="margin-top:0">${esc(desc)}</p>
     <canvas class="lab-canvas" id="lab-${id}"></canvas>
     <div class="player">
       <input type="range" class="scrub" min="0" max="1000" value="1000" aria-label="Position in time">
@@ -353,7 +379,7 @@ const LAB_VISUALS = LAB_DEFS.map(([id, title, desc, draw, duration]) => {
       </div>
     </div>`;
   $("#labBody").appendChild(card);
-  const v = { id, t: 1, playing: false, last: 0, raf: 0, dragging: false, duration, canvas: card.querySelector("canvas") };
+  const v = { id, t: 1, playing: false, last: 0, raf: 0, dragging: false, duration, mountain: hasMountain, canvas: card.querySelector("canvas") };
   const play = card.querySelector('[data-act="play"]'), scrub = card.querySelector(".scrub");
   v.draw = () => { if (!$("#labBody").hidden) draw(v); if (!v.dragging) scrub.value = Math.round(v.t * 1000); };
   const tick = (now) => {
@@ -369,6 +395,7 @@ const LAB_VISUALS = LAB_DEFS.map(([id, title, desc, draw, duration]) => {
   card.querySelector('[data-act="restart"]').addEventListener("click", () => { v.t = 0; v.play(); });
   scrub.addEventListener("input", () => { v.dragging = true; v.pause(); v.t = Number(scrub.value) / 1000; v.draw(); });
   scrub.addEventListener("change", () => (v.dragging = false));
+  card.querySelector('[data-act="mountain"]')?.addEventListener("change", (e) => { v.mountain = e.target.checked; v.draw(); });
   setPlayIcon(play, false);
   return v;
 });

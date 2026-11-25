@@ -159,17 +159,30 @@ function drawSong() {
     vNow = d.rolling[i] * (1 - u) + d.rolling[j] * u;
   }
 
-  // Trail of where it has been (faint), then the bar at the current moment.
-  ctx.lineJoin = "round";
-  ctx.strokeStyle = accent + "55"; ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  let on = false;
-  for (let k = 0; k <= i; k++) {
-    if (ranks[k] === null) { on = false; continue; }
-    if (on) ctx.lineTo(x(ranks[k]), y(d.rolling[k])); else { ctx.moveTo(x(ranks[k]), y(d.rolling[k])); on = true; }
+  // Trail of where it has been, aging as it goes: the fresh part is dark and thick, older parts fade to a
+  // light thin line, so when it doubles back over itself you can still see which part is recent.
+  // The fade takes about a year in "All time", ~6 weeks in "This year", a few days in "This month".
+  const fade = Math.max(5, Math.min(365, Math.round(N * 0.12)));
+  const BUCKETS = 24;                                       // draw in 24 shades instead of thousands of separate strokes
+  ctx.lineJoin = "round"; ctx.lineCap = "round"; ctx.strokeStyle = accent;
+  const shade = (age) => Math.min(BUCKETS - 1, Math.floor((age / fade) * BUCKETS));
+  for (let b = BUCKETS - 1; b >= 0; b--) {                  // oldest first, so fresh lines end up on top
+    const freshness = 1 - b / (BUCKETS - 1);                // 1 = newest, 0 = oldest
+    ctx.globalAlpha = 0.14 + 0.86 * freshness;
+    ctx.lineWidth = 1.2 + 1.8 * freshness;
+    ctx.beginPath();
+    for (let k = 1; k <= i; k++) {
+      if (ranks[k] === null || ranks[k - 1] === null || shade(i - k) !== b) continue;
+      ctx.moveTo(x(ranks[k - 1]), y(d.rolling[k - 1]));
+      ctx.lineTo(x(ranks[k]), y(d.rolling[k]));
+    }
+    if (b === 0 && rNow !== null && ranks[i] !== null) {    // the tiny bit between today's step and the gliding bar
+      ctx.moveTo(x(ranks[i]), y(d.rolling[i]));
+      ctx.lineTo(x(rNow), y(vNow));
+    }
+    ctx.stroke();
   }
-  if (on && rNow !== null) ctx.lineTo(x(rNow), y(vNow));
-  ctx.stroke();
+  ctx.globalAlpha = 1;
 
   if (rNow !== null) {
     const bw = narrow ? 10 : 14, bx = x(rNow) - bw / 2;

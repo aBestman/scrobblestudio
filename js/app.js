@@ -9,7 +9,7 @@ const css = (name) => getComputedStyle(document.documentElement).getPropertyValu
 const PALETTE = ["#d51007", "#2f6fdf", "#1db954", "#e8a317", "#8e44ad", "#16a3b8", "#e0559a", "#7a7a7a"];
 // api(path, options) comes from engine.js: it answers the old "/api/..." questions inside the browser.
 
-// Clean play / pause / restart icons for the players (Bar race, Song deep dive).
+// Clean play / pause / restart icons for the players (Bar race, Deep Dive).
 const ICONS = {
   play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>',
   pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="13.5" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>',
@@ -222,7 +222,7 @@ function renderMovers(listEl, droppedEl, d, kind, title, sub) {
   listEl.innerHTML = items.map((i) => {
     const picked = active && selection.ids.includes(i.id);
     const subtitle = [sub ? sub(i) : "", i.was !== null && i.was !== i.rank ? `was #${i.was}` : ""].filter(Boolean).join(" · ");
-    const tip = `${fmt(i.plays)} plays, ${fmt(i.added)} of them ${A}\nClick to filter, Ctrl+click to add`;
+    const tip = `${fmt(i.plays)} plays, ${fmt(i.added)} of them ${A}\nClick to filter, Ctrl+click to add, hold for its Deep Dive`;
     return `<li value="${i.rank}" class="${picked ? "picked" : ""}" data-id="${esc(i.id)}" data-label="${esc(LABEL_OF[kind](i))}"
       style="--w:${((100 * i.plays) / max).toFixed(1)}%;--g:${i.plays ? ((100 * i.added) / i.plays).toFixed(1) : 0}%" title="${esc(tip)}">
       <span class="p"><b>${fmt(i.plays)}</b>${i.added ? `<span class="plus">+${fmt(i.added)}</span>` : ""}${moveBadge(i)}</span>
@@ -309,18 +309,50 @@ function showSelection() {
   pill.title = names.join("\n");
   pill.hidden = false;
 }
-[["artist", "#artistList"], ["track", "#trackList"], ["album", "#albumList"]].forEach(([kind, sel]) =>
+// Tap/click = filter (Ctrl/Cmd+click adds to it). Hold ~½ s = open its Deep Dive.
+// onHold(list, selector, fn): calls fn(item) on a long press and swallows the click that follows it.
+function onHold(list, selector, fn) {
+  let timer = 0, start = null, fired = false;
+  const cancel = () => { clearTimeout(timer); timer = 0; };
+  list.addEventListener("pointerdown", (e) => {
+    const li = e.target.closest(selector);
+    if (!li || e.button > 0) return;
+    fired = false; start = { x: e.clientX, y: e.clientY };
+    cancel();
+    timer = setTimeout(() => { fired = true; timer = 0; navigator.vibrate?.(15); fn(li); }, 500);
+  });
+  list.addEventListener("pointermove", (e) => { if (timer && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) cancel(); });
+  ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => list.addEventListener(ev, cancel));
+  list.addEventListener("click", (e) => { if (fired) { fired = false; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+  list.addEventListener("contextmenu", (e) => { if (e.target.closest(selector)) e.preventDefault(); });   // phones: no menu on hold
+}
+const DIVE_KIND = { artist: "artist", track: "song", album: "album" };
+[["artist", "#artistList"], ["track", "#trackList"], ["album", "#albumList"]].forEach(([kind, sel]) => {
   $(sel).addEventListener("click", (e) => {
     const li = e.target.closest("li[data-id]");
     if (!li) return;
-    if (kind === "track" && !(e.ctrlKey || e.metaKey)) { openSong(li.dataset.id); return; }
     select(kind, li.dataset.id, li.dataset.label, e.ctrlKey || e.metaKey);
-  })
-);
+  });
+  onHold($(sel), "li[data-id]", (li) => openDive(DIVE_KIND[kind], li.dataset.id));
+});
 $("#selectionClear").addEventListener("click", clearSelection);
-// Song deep dive: the song's key goes in the address, e.g. #song=muse%1Fuprising
+// Deep Dive address: #song=<song key>&a=<artist>&b=<album>&k=<artist|song|album> (the song, its artist and its
+// album, so you can swipe between them). openDive looks up the other two first.
 const songKey = (artist, track) => artist.trim().toLowerCase() + "\x1f" + track.trim().toLowerCase();
-function openSong(key) { location.hash = "#song=" + encodeURIComponent(key); }
+const diveHash = (trio, kind) => "#song=" + encodeURIComponent(trio.song) + "&a=" + encodeURIComponent(trio.artist)
+  + (trio.album ? "&b=" + encodeURIComponent(trio.album) : "") + (kind && kind !== "song" ? "&k=" + kind : "");
+async function openDive(kind, key) {
+  try {
+    const info = await api("/api/song?" + new URLSearchParams({ kind, key }));
+    location.hash = diveHash(info.links, kind);
+  } catch (e) { toast(e.message, 6000); }
+}
+function openSong(key) { openDive("song", key); }
+$("#recentList").addEventListener("click", (e) => {
+  const li = e.target.closest("li[data-key]");
+  if (li) select("track", li.dataset.key, li.dataset.label, e.ctrlKey || e.metaKey);
+});
+onHold($("#recentList"), "li[data-key]", (li) => openDive("song", li.dataset.key));
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !e.target.closest?.("input, select, textarea")) clearSelection();
 });
@@ -428,11 +460,11 @@ async function loadRecent() {
       html += `<li class="day">${esc(label)}</li>`;
       lastDay = day;
     }
-    html += `<li class="link" data-key="${esc(songKey(i.artist, i.track))}" title="${esc(i.album)} · click for the song's deep dive"><span class="w" style="float:right">${esc(i.time.slice(11))}</span>
+    html += `<li class="link" data-key="${esc(songKey(i.artist, i.track))}" data-label="${esc(`${i.track} (${i.artist})`)}" title="${esc(i.album)} · click to filter on this song, hold for its Deep Dive"><span class="w" style="float:right">${esc(i.time.slice(11))}</span>
       <span class="t">${esc(i.track)}</span><span class="a">${esc(i.artist)}</span></li>`;
   }
   $("#recentList").innerHTML = html || "<li>No scrobbles yet.</li>";
-  $$("#recentList li[data-key]").forEach((li) => li.addEventListener("click", () => openSong(li.dataset.key)));
+  // (clicks are handled once on the list, further down: tap = filter on the song, hold = Deep Dive)
   $("#recentCount").textContent = items.length ? `last ${items.length}` : "";
 }
 
@@ -696,7 +728,7 @@ async function loadPlaylistsPage() {
 }
 
 // ---------------------------------------------------------------- pages (#scrobbles, #trends, #playlists)
-const PAGES = { scrobbles: "", song: "· Song deep dive", lab: "· Song visual test", race: "· Bar race", playlists: "· Playlist Studio" };
+const PAGES = { scrobbles: "", song: "· Deep Dive", lab: "· Song visual test", race: "· Bar race", playlists: "· Playlist Studio" };
 let currentPage = null;
 
 function pageFromHash() {

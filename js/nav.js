@@ -16,7 +16,7 @@
   const onIndex = !/(settings|locations)\.html$/.test(location.pathname);
   const ITEMS = [
     ["scrobbles", "Scrobbles", onIndex ? "#scrobbles" : "./#scrobbles"],
-    ["song", "Song deep dive", onIndex ? "#song" : "./#song"],
+    ["song", "Deep Dive", onIndex ? "#song" : "./#song"],
     ["lab", "🧪 Song visual test", onIndex ? "#lab" : "./#lab"],
     ["race", "Bar race", onIndex ? "#race" : "./#race"],
     ["playlists", "Playlist Studio", onIndex ? "#playlists" : "./#playlists"],

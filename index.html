@@ -8,9 +8,9 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=21">
+  <link rel="stylesheet" href="style.css?v=22">
   <!-- Chart.js 4.4.1 (official npm release), stored in this repository so no outside code runs in the app -->
-  <script src="js/chart.umd.min.js?v=21"></script>
+  <script src="js/chart.umd.min.js?v=22"></script>
 </head>
 <body>
   <div class="sticky-top">
@@ -312,7 +312,7 @@
     </main>
   </div>
 
-  <!-- ============================================================ Song deep dive -->
+  <!-- ============================================================ Deep Dive (artist ‹ song › album) -->
   <div class="page" data-page="song" hidden>
     <main class="page-main">
       <section class="card song-search">
@@ -321,13 +321,14 @@
           <ul id="songResults" class="suggest" hidden></ul>
         </div>
       </section>
-      <section class="card hint" id="songEmpty">Search a song above, or click a song in the Top songs list on the Scrobbles page.</section>
+      <section class="card hint" id="songEmpty">Search a song above, or hold (long press) an artist, song or album on the Scrobbles page.</section>
       <div id="songBody" class="song-body" hidden>
-        <div class="song-head" id="songHead"><div class="song-head-text"><h2 id="songTitle"></h2><span class="hint" id="songSub"></span></div><div class="song-head-nums" id="songHeadNums"></div></div>
+        <div class="song-head" id="songHead"><div class="seg seg-neutral dive-tabs" id="diveTabs" role="tablist" aria-label="Artist, song or album"><button data-kind="artist">Artist</button><button data-kind="song">Song</button><button data-kind="album">Album</button></div><div class="song-head-text"><h2 id="songTitle"></h2><span class="hint" id="songSub"></span></div><div class="song-head-nums" id="songHeadNums"></div></div>
+        <div id="diveContent" class="dive-content">
         <section class="stats" id="songStats"></section>
         <section class="card">
           <div class="card-head chart-head">
-            <h2>Skyline: position among all your songs</h2>
+            <h2 id="songSkyTitle">Skyline: position among all your songs</h2>
             <div class="seg seg-neutral" id="songRange" role="group" aria-label="Period">
               <button data-range="all">All time</button><button data-range="year">This year</button><button data-range="month">This month</button>
             </div>
@@ -361,9 +362,10 @@
         </section>
         <section class="card">
           <div class="card-head"><h2>Played together</h2></div>
-          <p class="hint">For every play of this song: the 3 songs you played most within 2 days before or after. These 5 made that top 3 most often.</p>
+          <p class="hint" id="songTogetherHint">For every play of this song: the 3 songs you played most within 2 days before or after. These 5 made that top 3 most often.</p>
           <ol id="songTogether" class="ranklist together"></ol>
         </section>
+        </div>
       </div>
     </main>
   </div>
@@ -393,11 +395,11 @@
   </div>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="js/engine.js?v=21"></script>
-  <script src="js/nav.js?v=21"></script>
-  <script src="js/app.js?v=21"></script>
-  <script src="js/race.js?v=21"></script>
-  <script src="js/song.js?v=21"></script>
-  <script src="js/songlab.js?v=21"></script>
+  <script src="js/engine.js?v=22"></script>
+  <script src="js/nav.js?v=22"></script>
+  <script src="js/app.js?v=22"></script>
+  <script src="js/race.js?v=22"></script>
+  <script src="js/song.js?v=22"></script>
+  <script src="js/songlab.js?v=22"></script>
 </body>
 </html>

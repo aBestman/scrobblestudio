@@ -462,3 +462,15 @@ label.wide input { flex: 1; }
   .song-head h2 { font-size: 19px; white-space: nowrap; }
   .song-head-nums b { font-size: 16px; }
 }
+
+/* Deep Dive: artist ‹ song › album tabs in the pinned header, and a short slide when you swipe */
+.song-head .dive-tabs { flex-basis: 100%; }
+.dive-tabs button:disabled { opacity: .4; cursor: not-allowed; }
+.dive-content { display: grid; gap: 16px; }
+.dive-content.slide-next { animation: dive-next .28s ease-out; }
+.dive-content.slide-prev { animation: dive-prev .28s ease-out; }
+@keyframes dive-next { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes dive-prev { from { transform: translateX(-40px); opacity: 0; } to { transform: none; opacity: 1; } }
+#songBody { touch-action: pan-y; overflow-x: clip; }
+/* Lists you can long-press: no text selection or phone menu while holding */
+#artistList li, #trackList li, #albumList li, #recentList li[data-key] { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }

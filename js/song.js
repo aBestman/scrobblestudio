@@ -1,12 +1,15 @@
-// Song deep dive: one song's numbers, its rank among all your songs over time, and what you play around it.
-// Uses helpers from app.js ($, $$, esc, fmt, css, toast, openSong, setPlayIcon, ICONS).
+// Deep Dive: one artist, song or album: its numbers, its position among all of them over time, its year rings
+// and what you play around it. Swipe (or use the tabs) to go artist ‹ song › album.
+// Uses helpers from app.js ($, $$, esc, fmt, css, toast, openDive, diveHash, setPlayIcon, ICONS).
 
-const sd = { key: null, info: null, rank: null, ladder: null, range: "all", t: 1, playing: false, last: 0, raf: 0, dragging: false };
+const sd = { kind: "song", key: null, trio: null, info: null, rank: null, ladder: null, range: "all", t: 1, playing: false, last: 0, raf: 0, dragging: false };
+const DIVE_ORDER = ["artist", "song", "album"];
+const NOUN = { artist: "artist", song: "song", album: "album" }, NOUNS = { artist: "artists", song: "songs", album: "albums" };
 const MON3S = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const niceDate = (ymd) => { const [y, m, d] = ymd.split("-"); return `${Number(d)} ${MON3S[m - 1]} ${y}`; };
 const songDuration = () => ({ all: 14000, year: 9000, month: 6000 }[sd.range]);
 // Regular speed in ms per day. Year and month: the whole period in 9 s / 6 s. All time: your whole history
-// in 14 s, but the part from the song's first play takes at least 6 s.
+// in 14 s, but the part from the first play takes at least 6 s.
 function msPerDay() {
   const d = sd.rank, N = Math.max(2, d ? d.labels.length : 2);
   if (sd.range !== "all") return songDuration() / N;
@@ -35,45 +38,102 @@ $("#songResults").addEventListener("mousedown", (e) => {
   e.preventDefault();
   $("#songResults").hidden = true;
   $("#songQuery").value = "";
-  openSong(li.dataset.key);
+  openDive("song", li.dataset.key);
 });
 $("#songQuery").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") { const first = $("#songResults li[data-key]"); if (first) { $("#songResults").hidden = true; $("#songQuery").value = ""; openSong(first.dataset.key); } }
+  if (e.key === "Enter") { const first = $("#songResults li[data-key]"); if (first) { $("#songResults").hidden = true; $("#songQuery").value = ""; openDive("song", first.dataset.key); } }
   if (e.key === "Escape") $("#songResults").hidden = true;
 });
 $("#songQuery").addEventListener("blur", () => setTimeout(() => ($("#songResults").hidden = true), 150));
 
 // ---------------------------------------------------------------- page
+// Address: #song=<song key>&a=<artist>&b=<album>&k=<artist|song|album>. The three stay together while you
+// swipe, so you can go back and forth between the same song, its artist and its album.
+const infoCache = new Map();
+async function getInfo(kind, key) {
+  const id = kind + "|" + key;
+  if (!infoCache.has(id)) infoCache.set(id, await api("/api/song?" + new URLSearchParams({ kind, key })));
+  return infoCache.get(id);
+}
 window.loadSong = async () => {
-  let key = decodeURIComponent(location.hash.split("=").slice(1).join("=") || "");
-  if (!key) { try { key = localStorage.getItem("ss-song") || ""; } catch {} }
-  $("#songEmpty").hidden = !!key;
-  $("#songBody").hidden = !key;
-  if (!key) { setTimeout(() => $("#songQuery").focus(), 50); return; }
-  if (key === sd.key && sd.info) { drawSong(); drawRingsCard(); return; }
-  pauseSong();
-  pauseRings();
+  let p = new URLSearchParams(location.hash.slice(1));
+  if (!p.get("song")) {                                   // nothing in the address: the last one you looked at
+    let saved = "";
+    try { saved = localStorage.getItem("ss-dive") || ""; if (!saved && localStorage.getItem("ss-song")) saved = "song=" + encodeURIComponent(localStorage.getItem("ss-song")); } catch {}
+    p = new URLSearchParams(saved);
+  }
+  const trio = { song: p.get("song") || "", artist: p.get("a"), album: p.get("b") };
+  let kind = DIVE_ORDER.includes(p.get("k")) ? p.get("k") : "song";
+  if (!sd.trio || sd.trio.song !== trio.song) infoCache.clear();   // keep cached numbers only while swiping
+  $("#songEmpty").hidden = !!trio.song;
+  $("#songBody").hidden = !trio.song;
+  if (!trio.song) { setTimeout(() => $("#songQuery").focus(), 50); return; }
   try {
-    sd.info = await api("/api/song?" + new URLSearchParams({ key }));
+    if (!trio.artist) { const s = await getInfo("song", trio.song); trio.artist = s.links.artist; trio.album = s.links.album; }
+    if (kind === "album" && !trio.album) kind = "song";   // no album info for this song
+    const key = trio[kind];
+    if (kind === sd.kind && key === sd.key && sd.info) { markDiveTabs(); drawSong(); drawRingsCard(); return; }
+    const from = sd.trio && sd.trio.song === trio.song ? DIVE_ORDER.indexOf(sd.kind) : -1;
+    pauseSong();
+    pauseRings();
+    const info = await getInfo(kind, key);
+    Object.assign(sd, { kind, key, trio, info });
+    try { localStorage.setItem("ss-dive", diveHash(trio, kind).slice(1)); } catch {}
+    slideIn(from < 0 ? 0 : Math.sign(DIVE_ORDER.indexOf(kind) - from));
   } catch (e) {
     toast(e.message, 6000);
     $("#songEmpty").hidden = false;
     $("#songBody").hidden = true;
     return;
   }
-  sd.key = key;
-  try { localStorage.setItem("ss-song", key); } catch {}
+  markDiveTabs();
   renderSongInfo();
   loadRings();
   await loadSongRank();
 };
 
+// Tabs and swiping: artist ‹ song › album
+function markDiveTabs() {
+  $$("#diveTabs button").forEach((b) => {
+    b.classList.toggle("active", b.dataset.kind === sd.kind);
+    b.disabled = b.dataset.kind === "album" && !(sd.trio && sd.trio.album);
+    b.title = b.disabled ? "No album info for this song" : "";
+  });
+}
+function goDive(kind) {
+  if (!sd.trio || kind === sd.kind || (kind === "album" && !sd.trio.album)) return;
+  location.hash = diveHash(sd.trio, kind);
+}
+$$("#diveTabs button").forEach((b) => b.addEventListener("click", () => goDive(b.dataset.kind)));
+let swipe = null;
+$("#songBody").addEventListener("touchstart", (e) => {
+  swipe = e.touches.length === 1 && !e.target.closest("input, select, textarea, button") ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+}, { passive: true });
+$("#songBody").addEventListener("touchend", (e) => {
+  if (!swipe) return;
+  const dx = e.changedTouches[0].clientX - swipe.x, dy = e.changedTouches[0].clientY - swipe.y;
+  swipe = null;
+  if (Math.abs(dx) < 60 || Math.abs(dx) < 1.5 * Math.abs(dy)) return;   // mostly sideways, far enough
+  const i = DIVE_ORDER.indexOf(sd.kind) + (dx < 0 ? 1 : -1);             // swipe left → next (artist → song → album)
+  if (i >= 0 && i < DIVE_ORDER.length) goDive(DIVE_ORDER[i]);
+}, { passive: true });
+function slideIn(dir) {
+  const el = $("#diveContent");
+  el.classList.remove("slide-next", "slide-prev");
+  if (!dir) return;
+  void el.offsetWidth;                                     // restart the animation
+  el.classList.add(dir > 0 ? "slide-next" : "slide-prev");
+}
+
 function renderSongInfo() {
-  const s = sd.info;
-  $("#songTitle").textContent = s.track;
-  $("#songSub").textContent = `${s.artist}${s.album ? " · " + s.album : ""}`;
+  const s = sd.info, kind = sd.kind;
+  $("#songTitle").textContent = s.name;
+  $("#songSub").textContent = kind === "song" ? `${s.artist}${s.album ? " · " + s.album : ""}`
+    : kind === "album" ? `${s.artist} · ${fmt(s.songs)} different songs` : `${fmt(s.songs)} different songs`;
   $("#songHeadNums").innerHTML = `<span><b>${fmt(s.scrobbles)}</b> scrobbles</span>`
-    + `<span title="Position among all your songs, all time"><b>#${fmt(s.rank_all)}</b> of ${fmt(s.songs_total)}</span>`;
+    + `<span title="Position among all your ${NOUNS[kind]}, all time"><b>#${fmt(s.rank_all)}</b> of ${fmt(s.songs_total)}</span>`;
+  $("#songSkyTitle").textContent = `Skyline: position among all your ${NOUNS[kind]}`;
+  $("#songTogetherHint").textContent = `For every play: the 3 ${NOUNS[kind]} you played most within 2 days before or after. These 5 made that top 3 most often.`;
   const g = s.gap;
   const tile = (v, l, tip) => `<div class="stat"${tip ? ` title="${esc(tip)}"` : ""}><div class="v">${v}</div><div class="l">${l}</div></div>`;
   $("#songStats").innerHTML = [
@@ -82,15 +142,15 @@ function renderSongInfo() {
     tile(fmt(s.days), "different days listened"),
     tile(`${fmt(g.days)} <span class="v-unit">days</span>`,
       g.days ? `longest without it · ${niceDate(g.from)} → ${g.ongoing ? "today (still going)" : niceDate(g.to)}` : "longest without it",
-      "The longest stretch of days you didn't play this song, counted up to today"),
+      `The longest stretch of days you didn't play this ${NOUN[kind]}, counted up to today`),
   ].join("");
   $("#songTogether").innerHTML = s.together.length
-    ? s.together.map((x) => `<li class="link" data-key="${esc(x.key)}" title="Open this song's deep dive">
-        <span class="p">${fmt(x.times)}×</span><span class="t">${esc(x.track)}</span>
-        <span class="a">${esc(x.artist)} · in the top 3 around ${fmt(x.times)} of ${fmt(x.of)} plays</span></li>`).join("")
-    : "<li>Not enough plays around this song yet.</li>";
+    ? s.together.map((x) => `<li class="link" data-key="${esc(x.key)}" title="Open its Deep Dive">
+        <span class="p">${fmt(x.times)}×</span><span class="t">${esc(x.name)}</span>
+        <span class="a">${kind === "artist" ? "" : esc(x.artist) + " · "}in the top 3 around ${fmt(x.times)} of ${fmt(x.of)} plays</span></li>`).join("")
+    : `<li>Not enough plays around this ${NOUN[kind]} yet.</li>`;
 }
-$("#songTogether").addEventListener("click", (e) => { const li = e.target.closest("li[data-key]"); if (li) openSong(li.dataset.key); });
+$("#songTogether").addEventListener("click", (e) => { const li = e.target.closest("li[data-key]"); if (li) openDive(sd.kind, li.dataset.key); });
 
 // ---------------------------------------------------------------- shared chart helpers (also used by the test page)
 const LAB_FONT = "Segoe UI, system-ui, sans-serif";
@@ -165,7 +225,7 @@ function drawSkyline(canvas, d, ld, t, duration) {
     ctx.fillStyle = muted; ctx.fillText(`#${fmt(10 ** k)}`, lx, H - B + 16);
     lastLabel = lx;
   }
-  ctx.textAlign = "right"; ctx.fillText(`position among all ${fmt(ld.songsEnd)} songs → #1`, W - R, H - 4);
+  ctx.textAlign = "right"; ctx.fillText(`position among all ${fmt(ld.songsEnd)} ${NOUNS[ld.kind || "song"]} → #1`, W - R, H - 4);
   ctx.textAlign = "left"; ctx.fillText("plays so far", L, T - 10);
 
   // The other songs, blended between the two nearest snapshots
@@ -207,7 +267,7 @@ function drawSkyline(canvas, d, ld, t, duration) {
   }
   const rk = d.rank[a.k];
   header(g, rk === null ? "–" : `#${fmt(rk)}`, `${fmt(d.plays[a.k])} plays so far`,
-    `${niceDate(d.labels[a.k])} · of ${fmt(d.total[a.k])} songs`);
+    `${niceDate(d.labels[a.k])} · of ${fmt(d.total[a.k])} ${NOUNS[ld.kind || "song"]}`);
 }
 
 // ---------------------------------------------------------------- rank over time
@@ -218,7 +278,7 @@ markSongRange();
 async function loadSongRank() {
   pauseSong();
   try {
-    const q = new URLSearchParams({ key: sd.key, range: sd.range });
+    const q = new URLSearchParams({ kind: sd.kind, key: sd.key, range: sd.range });
     [sd.rank, sd.ladder] = await Promise.all([api("/api/songrank?" + q), api("/api/songladder?" + q)]);
   } catch (e) {
     sd.rank = null; sd.ladder = null;
@@ -296,7 +356,7 @@ async function loadRings() {
   pauseRings();
   rg.half = ringHalf();
   try {
-    rg.data = await api("/api/songrings?" + new URLSearchParams({ key: sd.key, half: rg.half }));
+    rg.data = await api("/api/songrings?" + new URLSearchParams({ kind: sd.kind, key: sd.key, half: rg.half }));
   } catch (e) {
     rg.data = null;
     toast(e.message, 6000);

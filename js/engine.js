@@ -551,10 +551,37 @@
 
   const dayNum = (ymd) => Math.round(Date.parse(ymd + "T00:00:00Z") / 86400000);
 
+  // ------------------------------------------------------------------ Deep Dive: one artist, song or album
+  // ?kind=artist|song|album (default song). Keys are the same ids the Scrobbles page lists use:
+  // song = "artist\x1ftrack" lowercased, artist = the artist name, album = "artist\x1falbum".
+  const DIVE_KINDS = ["artist", "song", "album"];
+  const DIVE_KEY = { song: (r) => r.key, artist: (r) => r.artist, album: albumOf };
+  let diveCache = { rows: null };
+  function dive(kind) {                                     // { keys (one per scrobble, in E.rows order), list, byKey }
+    if (diveCache.rows !== E.rows) diveCache = { rows: E.rows };
+    if (diveCache[kind]) return diveCache[kind];
+    const keys = E.rows.map(DIVE_KEY[kind]), byKey = new Map();
+    E.rows.forEach((r, i) => {
+      const k = keys[i];
+      if (k === null) return;
+      let s = byKey.get(k);
+      if (!s) byKey.set(k, (s = { key: k, kind, name: kind === "song" ? r.track : kind === "album" ? r.album : r.artist, artist: r.artist, track: r.track, album: r.album, plays: 0 }));
+      s.plays++;
+    });
+    const list = [...byKey.values()].sort((a, b) => b.plays - a.plays);
+    return (diveCache[kind] = { keys, list, byKey });
+  }
+  const kindArg = (q) => (DIVE_KINDS.includes(q.get("kind")) ? q.get("kind") : "song");
+  const itemOf = (kind, key) => dive(kind).byKey.get(key) || fail(`That ${kind} isn't in your scrobbles.`);
+  const firstIndexFrom = (ymd) => { let lo = 0, hi = E.rows.length; while (lo < hi) { const m = (lo + hi) >> 1; if (E.rows[m].ymd < ymd) lo = m + 1; else hi = m; } return lo; };
+  const mostCommon = (vals) => { const c = new Map(); let best = null, n = 0; for (const v of vals) { if (v === null) continue; const k = (c.get(v) || 0) + 1; c.set(v, k); if (k > n) { n = k; best = v; } } return best; };
+
   function songInfo(q) {
-    const s = songOf(q.get("key"));
-    const idx = [];                                        // positions of this song's scrobbles in E.rows
-    E.rows.forEach((r, i) => { if (r.key === s.key) idx.push(i); });
+    const kind = kindArg(q);
+    const { keys, list } = dive(kind);
+    const s = itemOf(kind, q.get("key"));
+    const idx = [];                                        // positions of its scrobbles in E.rows
+    keys.forEach((k, i) => { if (k === s.key) idx.push(i); });
     const plays = idx.map((i) => E.rows[i]);
     const days = [...new Set(plays.map((r) => r.ymd))];   // already in time order
     const today = ymdLocal(new Date());
@@ -567,14 +594,14 @@
     }
     const first = plays[0], last = plays[plays.length - 1];
 
-    // Played together: for each scrobble, the top 3 other songs within ±2 days; then the songs
+    // Played together: for each scrobble, the top 3 other items (same kind) within ±2 days; then the ones
     // that most often make that top 3. Two pointers keep a running count of the ±2-day window.
     const W = 2 * 86400, win = new Map(), tally = new Map();
     let lo = 0, hi = 0;
     for (const i of idx) {
       const t = E.rows[i].uts;
-      while (hi < E.rows.length && E.rows[hi].uts <= t + W) { const k = E.rows[hi++].key; win.set(k, (win.get(k) || 0) + 1); }
-      while (E.rows[lo].uts < t - W) { const k = E.rows[lo++].key; const n = win.get(k) - 1; if (n) win.set(k, n); else win.delete(k); }
+      while (hi < E.rows.length && E.rows[hi].uts <= t + W) { const k = keys[hi++]; if (k !== null) win.set(k, (win.get(k) || 0) + 1); }
+      while (E.rows[lo].uts < t - W) { const k = keys[lo++]; if (k === null) continue; const n = win.get(k) - 1; if (n) win.set(k, n); else win.delete(k); }
       const top3 = [...win].filter(([k]) => k !== s.key).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, 3);
       for (const [k, n] of top3) {
         const e = tally.get(k) || { times: 0, plays: 0 };
@@ -583,54 +610,69 @@
       }
     }
     const together = [...tally].sort((a, b) => b[1].times - a[1].times || b[1].plays - a[1].plays).slice(0, 5)
-      .map(([k, e]) => ({ ...songOf(k), times: e.times, of: idx.length }));
+      .map(([k, e]) => ({ ...itemOf(kind, k), times: e.times, of: idx.length }));
 
+    // The three linked items you can swipe between: the song (for an artist or album: its most played song),
+    // that song's artist, and its album (for an album: itself).
+    const songK = kind === "song" ? s.key : mostCommon(plays.map((r) => r.key));
+    const songRows = kind === "song" ? plays : E.rows.filter((r) => r.key === songK);
+    const links = {
+      song: songK,
+      artist: kind === "artist" ? s.key : songRows[0].artist,
+      album: kind === "album" ? s.key : mostCommon(songRows.map(albumOf)),
+    };
     const fmtTime = (r) => `${r.ymd} ${pad(r.hh)}:${pad(r.mi)}`;
     return {
-      key: s.key, track: s.track, artist: s.artist, album: last.album,
+      kind, key: s.key, name: s.name, track: s.track, artist: s.artist,
+      album: kind === "album" ? s.album : kind === "song" ? (mostCommon(plays.map((r) => r.album || null)) || "") : "",
       scrobbles: plays.length, first: fmtTime(first), last: fmtTime(last),
-      days: days.length, gap, together,
-      rank_all: rankMap(new Map(songs().map((x) => [x.key, x.plays]))).ranks.get(s.key), songs_total: songs().length,
+      days: days.length, gap, together, links,
+      songs: kind === "song" ? 1 : new Set(plays.map((r) => r.key)).size,
+      rank_all: rankMap(new Map(list.map((x) => [x.key, x.plays]))).ranks.get(s.key), songs_total: list.length,
     };
   }
 
-  // The song's position among all your songs over time (cumulative plays since the period started),
-  // one value per day. Keeps a "how many songs are ahead" counter so it stays fast over 16 years.
+  // Its position among all items of that kind over time (cumulative plays since the period started),
+  // one value per day. Keeps a "how many are ahead" counter so it stays fast over 16 years.
   function songRank(q) {
-    const key = songOf(q.get("key")).key;
+    const kind = kindArg(q);
+    const { keys } = dive(kind);
+    const key = itemOf(kind, q.get("key")).key;
     const range = ["year", "month"].includes(q.get("range")) ? q.get("range") : "all";
     const start = range === "all" ? "0000-01-01" : periodStart(range);
-    const rows = E.rows.filter((r) => r.ymd >= start);
-    if (!rows.length) fail("No scrobbles in this period.");
+    const i0 = firstIndexFrom(start);
+    if (i0 >= E.rows.length) fail("No scrobbles in this period.");
     const today = ymdLocal(new Date());
     // The timeline covers the whole period: from your very first scrobble (All time) or the 1st of the
-    // year/month, up to today. firstIdx = the day of the song's first play in it (-1 if not played).
-    const firstPlay = rows.find((r) => r.key === key);
-    const labels = periodRange("day", range === "all" ? rows[0].ymd : start, today);
-    const firstIdx = firstPlay ? labels.indexOf(firstPlay.ymd) : -1;
-    const counts = new Map(), freq = new Map();   // freq: how many songs have exactly n plays
-    let c = 0, ahead = 0, j = 0;
+    // year/month, up to today. firstIdx = the day of the first play in it (-1 if not played).
+    let fp = i0;
+    while (fp < E.rows.length && keys[fp] !== key) fp++;
+    const labels = periodRange("day", range === "all" ? E.rows[i0].ymd : start, today);
+    const firstIdx = fp < E.rows.length ? labels.indexOf(E.rows[fp].ymd) : -1;
+    const counts = new Map(), freq = new Map();   // freq: how many have exactly n plays
+    let c = 0, ahead = 0, j = i0;
     const rank = [], plays = [], total = [];
     const add = (k) => {
+      if (k === null) return;
       const old = counts.get(k) || 0, now = old + 1;
-      if (k === key) { ahead -= freq.get(now) || 0; c = now; }        // songs it catches up with are no longer ahead
-      else if (old === c) ahead++;                                     // a song passes it
+      if (k === key) { ahead -= freq.get(now) || 0; c = now; }        // ones it catches up with are no longer ahead
+      else if (old === c) ahead++;                                     // one passes it
       if (old) freq.set(old, freq.get(old) - 1);
       freq.set(now, (freq.get(now) || 0) + 1);
       counts.set(k, now);
     };
     for (const day of labels) {
-      while (j < rows.length && rows[j].ymd === day) add(rows[j++].key);
+      while (j < E.rows.length && E.rows[j].ymd === day) add(keys[j++]);
       rank.push(c ? ahead + 1 : null);
       plays.push(c);
       total.push(counts.size);
     }
-    // Rolling window (default 12 months = 365 days): this song's plays in the window up to each day
+    // Rolling window (default 12 months = 365 days): its plays in the window up to each day
     // (also counting plays before the period). ?months=1..60 changes the window.
     const months = intArg(q.get("months"), 12, 1, 60);
     const windowDays = Math.round((months * 365) / 12);
     const perDay = new Map();
-    for (const r of E.rows) if (r.key === key) perDay.set(r.ymd, (perDay.get(r.ymd) || 0) + 1);
+    E.rows.forEach((r, i) => { if (keys[i] === key) perDay.set(r.ymd, (perDay.get(r.ymd) || 0) + 1); });
     const days = [...perDay.keys()].sort();
     const rolling = [];
     let sum = 0, inW = 0, outW = 0;                       // window = days (in, out] index pointers over `days`
@@ -640,16 +682,18 @@
       while (outW < inW && dayNum(days[outW]) <= dn - windowDays) sum -= perDay.get(days[outW++]);
       rolling.push(sum);
     }
-    return { range, labels, rank, plays, total, rolling, months, firstIdx };
+    return { kind, range, labels, rank, plays, total, rolling, months, firstIdx };
   }
 
-  // Year rings: for each day since the first play, this song's plays in a window around that day:
+  // Year rings: for each day since the first play, its plays in a window around that day:
   // ?half=N months before and after (including the day's own month), so N=1 → about 3 months.
   function songRings(q) {
-    const key = songOf(q.get("key")).key;
+    const kind = kindArg(q);
+    const { keys } = dive(kind);
+    const key = itemOf(kind, q.get("key")).key;
     const half = intArg(q.get("half"), 1, 0, 12);
     const halfDays = Math.round((half * 365) / 12) + 15;          // ± N months, plus half of the day's own month
-    const mine = E.rows.filter((r) => r.key === key);
+    const mine = E.rows.filter((r, i) => keys[i] === key);
     const labels = periodRange("day", mine[0].ymd, ymdLocal(new Date()));
     const at = new Map(labels.map((l, i) => [l, i]));
     const prefix = new Array(labels.length + 1).fill(0);
@@ -659,41 +703,45 @@
     return { labels, values, half, months: 2 * half + 1 };
   }
 
-  // Song visual test: the song and its neighbours in the ranking (5 above, 4 below) at ~200 moments in time.
+  // Skyline + neighbours ladder: at ~200 moments, everyone's plays so far, read at fixed positions, plus
+  // the item and its neighbours (5 above, 4 below).
   function songLadder(q) {
-    const key = songOf(q.get("key")).key;
+    const kind = kindArg(q);
+    const { keys } = dive(kind);
+    const key = itemOf(kind, q.get("key")).key;
     const range = ["year", "month"].includes(q.get("range")) ? q.get("range") : "all";
     const start = range === "all" ? "0000-01-01" : periodStart(range);
-    const rows = E.rows.filter((r) => r.ymd >= start);
-    if (!rows.length) fail("No scrobbles in this period.");
-    const labels = periodRange("day", range === "all" ? rows[0].ymd : start, ymdLocal(new Date()));
+    const i0 = firstIndexFrom(start);
+    if (i0 >= E.rows.length) fail("No scrobbles in this period.");
+    const labels = periodRange("day", range === "all" ? E.rows[i0].ymd : start, ymdLocal(new Date()));
     const F = Math.min(200, labels.length);
     const sampleDays = Array.from({ length: F }, (_, i) => labels[Math.round((i * (labels.length - 1)) / Math.max(1, F - 1))]);
     const counts = new Map();
     const frames = [];
-    // For the skyline: every song's plays so far, read at fixed positions (#1…#100 each, then spread out on a
-    // log scale up to the number of songs at the end), so the x-axis never changes during the animation.
-    const songsEnd = new Set(rows.map((r) => r.key)).size;
+    // Fixed positions (#1…#100 each, then spread out on a log scale up to the number at the end),
+    // so the x-axis never changes during the animation.
+    const endKeys = new Set();
+    for (let i = i0; i < E.rows.length; i++) if (keys[i] !== null) endKeys.add(keys[i]);
+    const songsEnd = endKeys.size;
     const at = new Set();
     for (let r = 1; r <= Math.min(100, songsEnd); r++) at.add(r);
     for (let s = 0; s <= 200; s++) at.add(Math.max(1, Math.round(10 ** ((s / 200) * Math.log10(Math.max(1, songsEnd))))));
     const distRanks = [...at].sort((a, b) => a - b);
-    let j = 0;
+    let j = i0;
     for (const day of sampleDays) {
-      while (j < rows.length && rows[j].ymd <= day) { const k = rows[j++].key; counts.set(k, (counts.get(k) || 0) + 1); }
+      while (j < E.rows.length && E.rows[j].ymd <= day) { const k = keys[j++]; if (k !== null) counts.set(k, (counts.get(k) || 0) + 1); }
       const sorted = [...counts].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
       const dist = distRanks.map((r) => (r <= sorted.length ? sorted[r - 1][1] : 0));
       const me = sorted.findIndex(([k]) => k === key);
       const rankOf = (idx) => { const n = sorted[idx][1]; let p = idx; while (p > 0 && sorted[p - 1][1] === n) p--; return p + 1; };
-      // 5 above and 4 below; near the top (or bottom) the window shifts so there are always 10 rows.
       const from = me < 0 ? 0 : Math.max(0, Math.min(me - 5, sorted.length - 10));   // not played yet: the top 10
       const pick = sorted.slice(from, from + 10).map(([k, n], o) => {
-        const s = songIndex.byKey.get(k);
-        return { key: k, track: s.track, artist: s.artist, plays: n, rank: rankOf(from + o), me: k === key };
+        const s = itemOf(kind, k);
+        return { key: k, track: s.name, artist: s.artist, plays: n, rank: rankOf(from + o), me: k === key };
       });
       frames.push({ day, rank: me < 0 ? null : rankOf(me), plays: me < 0 ? 0 : sorted[me][1], songs: sorted.length, rows: pick, dist });
     }
-    return { range, frames, distRanks, songsEnd };
+    return { kind, range, frames, distRanks, songsEnd };
   }
   // ------------------------------------------------------------------ Bar race: values per step for an animated ranking
   const weekCache = new Map();
@@ -1467,7 +1515,7 @@
       case "songsearch": return songSearch(q);
       case "song": return songInfo(q);
       case "songrank": return songRank(q);
-      case "songladder": songs(); return songLadder(q);
+      case "songladder": return songLadder(q);
       case "songrings": return songRings(q);
       case "recent": return recent(q);
       case "playlist": return playlist(q);

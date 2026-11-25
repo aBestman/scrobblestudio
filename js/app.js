@@ -21,6 +21,12 @@ function setPlayIcon(btn, playing) {
   btn.title = playing ? "Pause" : "Play";
 }
 
+// A time slider is "being dragged" from its first input until the finger / mouse lets go. On phones the
+// "change" event doesn't always come (e.g. touch the slider, then scroll), so also let go on these.
+function onScrubRelease(el, fn) {
+  for (const ev of ["change", "pointerup", "pointercancel", "touchend", "touchcancel", "blur"]) el.addEventListener(ev, fn, { passive: true });
+}
+
 function toast(text, ms = 4000) {
   const t = $("#toast");
   t.textContent = text;
@@ -638,7 +644,7 @@ $("#loadTags").addEventListener("click", async () => {
 
 function renderPlaylist() {
   $("#plList").innerHTML = playlist
-    .map((t, i) => `<li><button class="x" title="Remove" data-i="${i}">×</button><span class="p">${fmt(t.plays)} plays</span>
+    .map((t, i) => `<li><button class="x" title="Remove" data-i="${i}">×</button><span class="p">${t.pct != null ? `${t.pct}%` : `${fmt(t.plays)} plays`}</span>
       <span class="t">${esc(t.track)}</span><br><span class="a">${esc(t.artist)}</span>${t.note ? ` <span class="n">· ${esc(t.note)}</span>` : ""}</li>`)
     .join("") || "<li>No songs matched. Try different settings.</li>";
 }
@@ -654,6 +660,7 @@ $("#previewBtn").addEventListener("click", async () => {
   if (kind === "artists") params.artists = $("#artistInput").value;
   if (kind === "genre") params.tag = $("#tagInput").value;
   if (kind === "onthisday") params.window = $("#window").value;
+  if (kind === "obsession") Object.assign(params, { days: $("#obDays").value, pct: $("#obPct").value });
   if (kind === "weather") {
     Object.assign(params, {
       cond: $("#wCond").value, scope: $("#wScope").value, sort: $("#wSort").value,
@@ -661,8 +668,8 @@ $("#previewBtn").addEventListener("click", async () => {
       months: [...document.querySelectorAll("#wMonths input:checked")].map((c) => c.value).join(","),
     });
   }
-  // Top tracks and Weather use Playlist Studio's own period (not the Scrobbles page filters).
-  if (kind === "top" || kind === "weather") {
+  // Top tracks, Weather and Obsession finder use Playlist Studio's own period (not the Scrobbles page filters).
+  if (kind === "top" || kind === "weather" || kind === "obsession") {
     if ($("#plStart").value) params.start = $("#plStart").value;
     if ($("#plEnd").value) params.end = $("#plEnd").value;
   }
@@ -680,6 +687,7 @@ $("#previewBtn").addEventListener("click", async () => {
     $("#createMsg").className = "msg";
     $("#preview").hidden = false;
     renderPlaylist();
+    if (d.found > playlist.length) toast(`${fmt(d.found)} songs qualify; showing the top ${playlist.length}. Raise "Number of songs" for more.`, 6000);
   } catch (e) {
     toast(e.message, 8000);
   } finally {

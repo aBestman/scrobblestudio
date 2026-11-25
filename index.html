@@ -8,9 +8,9 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=26">
+  <link rel="stylesheet" href="style.css?v=27">
   <!-- Chart.js 4.4.1 (official npm release), stored in this repository so no outside code runs in the app -->
-  <script src="js/chart.umd.min.js?v=26"></script>
+  <script src="js/chart.umd.min.js?v=27"></script>
 </head>
 <body>
   <div class="sticky-top">
@@ -170,7 +170,7 @@
         </label>
         <label>From <input type="date" id="plStart"></label>
         <label>To <input type="date" id="plEnd"></label>
-        <span class="hint">Used by Top tracks and Weather.</span>
+        <span class="hint">Used by Top tracks, Weather and Obsession finder.</span>
       </div>
       <div class="tabs" id="tabs">
         <button class="tab active" data-kind="top">Top tracks</button>
@@ -179,6 +179,7 @@
         <button class="tab" data-kind="genre">Genre deep-dive</button>
         <button class="tab" data-kind="onthisday">On this day</button>
         <button class="tab" data-kind="weather">Weather</button>
+        <button class="tab" data-kind="obsession">Obsession finder</button>
       </div>
 
       <div class="params">
@@ -242,6 +243,11 @@
             <label><input type="checkbox" value="11">Nov</label><label><input type="checkbox" value="12">Dec</label>
           </div>
           <p class="hint" id="wHint">Uses the weather from your <a href="locations.html">Weather locations</a> and the period above.</p>
+        </div>
+        <div class="param-group" data-for="obsession" hidden>
+          <label>Within <input type="number" id="obDays" value="7" min="1" max="3650"> days</label>
+          <label>a song made up at least <input type="number" id="obPct" value="5" min="1" max="100" step="1"> % of my scrobbles</label>
+          <p class="hint">Looks at every stretch of that many days in the period above and keeps each song's strongest one (with at least 3 plays in it). Highest % first.</p>
         </div>
         <div class="param-row">
           <label>Number of songs <input type="number" id="limit" value="50" min="5" max="200"></label>
@@ -406,11 +412,11 @@
   </div>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="js/engine.js?v=26"></script>
-  <script src="js/nav.js?v=26"></script>
-  <script src="js/app.js?v=26"></script>
-  <script src="js/race.js?v=26"></script>
-  <script src="js/song.js?v=26"></script>
-  <script src="js/songlab.js?v=26"></script>
+  <script src="js/engine.js?v=27"></script>
+  <script src="js/nav.js?v=27"></script>
+  <script src="js/app.js?v=27"></script>
+  <script src="js/race.js?v=27"></script>
+  <script src="js/song.js?v=27"></script>
+  <script src="js/songlab.js?v=27"></script>
 </body>
 </html>

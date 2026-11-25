@@ -211,6 +211,7 @@ function playRace() {
   if (!race.data) return;
   if (race.t >= race.duration) { race.t = 0; race.pos.clear(); }
   race.playing = true;
+  race.dragging = false;
   race.last = 0;
   setPlayButton();
   cancelAnimationFrame(race.raf);
@@ -229,7 +230,7 @@ $("#raceScrub").addEventListener("input", (e) => {
   race.t = (Number(e.target.value) / 1000) * race.duration;
   drawRace(Infinity);
 });
-$("#raceScrub").addEventListener("change", () => { race.dragging = false; setPlayButton(); });
+onScrubRelease($("#raceScrub"), () => { race.dragging = false; setPlayButton(); });
 window.addEventListener("resize", () => drawRace(Infinity));
 window.addEventListener("hashchange", () => { if (location.hash !== "#race") pauseRace(); });
 

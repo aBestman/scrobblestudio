@@ -536,14 +536,16 @@
   }
   const songOf = (key) => { songs(); return songIndex.byKey.get(key) || fail("That song isn't in your scrobbles."); };
 
-  // Search: every word must appear in the title or artist; most played first.
+  // Search: every word must appear in the name or the artist; most played first.
+  // ?kind=artist|song|album (default song) searches artists, songs or albums.
   function songSearch(q) {
     const words = (q.get("q") || "").toLowerCase().split(/\s+/).filter(Boolean);
     const limit = intArg(q.get("limit"), 12, 1, 50);
-    if (!words.length) return { items: songs().slice(0, limit) };
+    const kind = kindArg(q), list = kind === "song" ? songs() : dive(kind).list;
+    if (!words.length) return { kind, items: list.slice(0, limit) };
     const items = [];
-    for (const s of songs()) {
-      const hay = (s.track + " " + s.artist).toLowerCase();
+    for (const s of list) {
+      const hay = (kind === "artist" ? s.artist : (kind === "song" ? s.track : s.name) + " " + s.artist).toLowerCase();
       if (words.every((w) => hay.includes(w))) { items.push(s); if (items.length >= limit) break; }
     }
     return { items };
@@ -947,7 +949,67 @@
       return { name: `On this day · ${label}`, description: `What I listened to around ${label} in earlier years.`, tracks };
     }
     if (kind === "weather") return weatherPlaylist(q, limit);
+    if (kind === "obsession") return obsessions(q, limit);
     fail(`Unknown playlist type: ${kind}`);
+  }
+
+  // Obsession finder: songs that, in some stretch of `days` days inside the period, made up at least `pct`%
+  // of everything you scrobbled in those days. Each song counts once, with its strongest stretch; highest
+  // share first. A song needs at least OBSESSION_MIN plays in that stretch, so one lone play on a quiet
+  // week doesn't count as an obsession.
+  const OBSESSION_MIN = 3;
+  function obsessions(q, limit) {
+    const N = intArg(q.get("days"), 7, 1, 3650);
+    const pct = Math.max(0, Math.min(100, Number(q.get("pct")) || 5));
+    const rows = filtered(new URLSearchParams({ start: q.get("start") || "", end: q.get("end") || "" }));
+    if (!rows.length) fail("No scrobbles in that period.");
+    const d0 = dayNum(rows[0].ymd), D = dayNum(rows[rows.length - 1].ymd) - d0 + 1;
+    const W = Math.min(N, D);                               // a period shorter than the stretch: use all of it
+    const total = new Int32Array(D + 1);                    // total[i] = scrobbles on days before day i
+    const perSong = new Map();                              // song -> [[day, plays], …] in time order
+    for (const r of rows) {
+      const d = dayNum(r.ymd) - d0;
+      total[d + 1]++;
+      let a = perSong.get(r.key);
+      if (!a) perSong.set(r.key, (a = []));
+      if (a.length && a[a.length - 1][0] === d) a[a.length - 1][1]++; else a.push([d, 1]);
+    }
+    for (let i = 1; i <= D; i++) total[i] += total[i - 1];
+    const found = [];
+    for (const [key, days] of perSong) {
+      let plays = 0; for (const [, n] of days) plays += n;
+      if (plays < OBSESSION_MIN) continue;
+      // Try every stretch [s, s+W-1] that holds at least one play; two pointers count this song's plays in it.
+      let best = null, lo = 0, hi = 0, inWin = 0, lastS = -1;
+      for (const [d] of days) {
+        for (let s = Math.max(lastS + 1, d - W + 1, 0); s <= Math.min(d, D - W); s++) {
+          while (hi < days.length && days[hi][0] <= s + W - 1) inWin += days[hi++][1];
+          while (days[lo][0] < s) inWin -= days[lo++][1];
+          lastS = s;
+          if (inWin < OBSESSION_MIN) continue;
+          const all = total[s + W] - total[s], share = inWin / all;
+          if (!best || share > best.share) best = { share, plays: inWin, all, s };
+        }
+      }
+      if (best && best.share * 100 >= pct) found.push({ key, ...best });
+    }
+    found.sort((a, b) => b.share - a.share || b.plays - a.plays);
+    songs();
+    const ymdOf = (i) => ymdUTC((d0 + i) * 86400000);
+    const tracks = found.slice(0, limit).map((f) => {
+      const s = songIndex.byKey.get(f.key);
+      const from = ymdOf(f.s), to = ymdOf(f.s + W - 1);
+      return {
+        artist: s.artist, track: s.track, plays: f.plays, pct: Math.round(f.share * 1000) / 10,
+        note: `${f.plays} of ${f.all} plays · ${from === to ? from : from + " to " + to}`,
+      };
+    });
+    const per = W === 1 ? "a single day" : `${W} days`;
+    return {
+      name: `Obsessions · ${pct}%+ of ${per}`,
+      description: `Songs that made up at least ${pct}% of my listening over ${per}, via Last.fm.`,
+      tracks, found: found.length,
+    };
   }
 
   // ------------------------------------------------------------------ Last.fm updates

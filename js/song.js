@@ -29,23 +29,31 @@ $("#songQuery").addEventListener("input", () => {
     const q = $("#songQuery").value.trim();
     const list = $("#songResults");
     if (!q) { list.hidden = true; return; }
-    const { items } = await api("/api/songsearch?" + new URLSearchParams({ q, limit: 12 }));
+    // Searches what the tab you're on shows: artists, songs or albums.
+    const kind = sd.kind;
+    const { items } = await api("/api/songsearch?" + new URLSearchParams({ q, kind, limit: 12 }));
+    list.dataset.kind = kind;
     list.innerHTML = items.length
-      ? items.map((s) => `<li data-key="${esc(s.key)}"><b>${esc(s.track)}</b> <span class="hint">${esc(s.artist)} · ${fmt(s.plays)} plays</span></li>`).join("")
-      : '<li class="none">No songs found</li>';
+      ? items.map((s) => `<li data-key="${esc(s.key)}"><b>${esc(kind === "artist" ? s.artist : kind === "song" ? s.track : s.name)}</b> <span class="hint">${kind === "artist" ? "" : esc(s.artist) + " · "}${fmt(s.plays)} plays</span></li>`).join("")
+      : `<li class="none">No ${NOUNS[kind]} found</li>`;
     list.hidden = false;
   }, 150);
 });
+function pickResult(li) {
+  $("#songResults").hidden = true;
+  $("#songQuery").value = "";
+  openDive($("#songResults").dataset.kind || "song", li.dataset.key);
+}
+// Placeholder follows the tab: "Search library: artists" etc.
+function markSearch() { $("#songQuery").placeholder = `Search library: ${NOUNS[sd.kind]}`; }
 $("#songResults").addEventListener("mousedown", (e) => {
   const li = e.target.closest("li[data-key]");
   if (!li) return;
   e.preventDefault();
-  $("#songResults").hidden = true;
-  $("#songQuery").value = "";
-  openDive("song", li.dataset.key);
+  pickResult(li);
 });
 $("#songQuery").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") { const first = $("#songResults li[data-key]"); if (first) { $("#songResults").hidden = true; $("#songQuery").value = ""; openDive("song", first.dataset.key); } }
+  if (e.key === "Enter") { const first = $("#songResults li[data-key]"); if (first) pickResult(first); }
   if (e.key === "Escape") $("#songResults").hidden = true;
 });
 $("#songQuery").addEventListener("blur", () => setTimeout(() => ($("#songResults").hidden = true), 150));
@@ -134,6 +142,7 @@ function markDiveTabs() {
     b.disabled = b.dataset.kind === "album" && !(sd.trio && sd.trio.album);
     b.title = b.disabled ? "No album info for this song" : "";
   });
+  markSearch();
 }
 const canGo = (kind) => sd.trio && kind && kind !== sd.kind && !(kind === "album" && !sd.trio.album);
 const neighbour = (step) => DIVE_ORDER[DIVE_ORDER.indexOf(sd.kind) + step];
@@ -414,7 +423,7 @@ function tickSong(now) {
 function playSong() {
   if (!sd.rank) return;
   if (sd.t >= 1) sd.t = 0;
-  sd.playing = true;
+  sd.playing = true; sd.dragging = false;
   sd.last = 0;
   setPlayIcon($("#songPlay"), true);
   cancelAnimationFrame(sd.raf);
@@ -430,7 +439,7 @@ $("#songRestart").innerHTML = ICONS.restart;
 $("#songRestart").title = "Restart";
 $("#songRestart").addEventListener("click", () => { sd.t = 0; playSong(); });
 $("#songScrub").addEventListener("input", (e) => { sd.dragging = true; pauseSong(); sd.t = Number(e.target.value) / 1000; drawSong(); });
-$("#songScrub").addEventListener("change", () => (sd.dragging = false));
+onScrubRelease($("#songScrub"), () => (sd.dragging = false));
 setPlayIcon($("#songPlay"), false);
 // Redraw when the page's width really changes (window resize, phone rotation, sidebar folding)
 let songBodyW = 0;
@@ -580,7 +589,7 @@ function tickRings(now) {
 function playRings() {
   if (!rg.data) return;
   if (rg.t >= 1) rg.t = 0;
-  rg.playing = true; rg.last = 0;
+  rg.playing = true; rg.last = 0; rg.dragging = false;
   setPlayIcon($("#ringPlay"), true);
   cancelAnimationFrame(rg.raf);
   rg.raf = requestAnimationFrame(tickRings);
@@ -595,5 +604,5 @@ $("#ringRestart").innerHTML = ICONS.restart;
 $("#ringRestart").title = "Restart";
 $("#ringRestart").addEventListener("click", () => { rg.t = 0; playRings(); });
 $("#ringScrub").addEventListener("input", (e) => { rg.dragging = true; pauseRings(); rg.t = Number(e.target.value) / 1000; drawRingsCard(); });
-$("#ringScrub").addEventListener("change", () => (rg.dragging = false));
+onScrubRelease($("#ringScrub"), () => (rg.dragging = false));
 setPlayIcon($("#ringPlay"), false);

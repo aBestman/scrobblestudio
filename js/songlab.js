@@ -312,12 +312,12 @@ const LAB_VISUALS = LAB_DEFS.map(([id, title, desc, draw, duration, hasMountain]
     if (v.t >= 1) { v.pause(); return; }
     v.raf = requestAnimationFrame(tick);
   };
-  v.play = () => { if (v.t >= 1) v.t = 0; v.playing = true; v.last = 0; setPlayIcon(play, true); cancelAnimationFrame(v.raf); v.raf = requestAnimationFrame(tick); };
+  v.play = () => { if (v.t >= 1) v.t = 0; v.playing = true; v.dragging = false; v.last = 0; setPlayIcon(play, true); cancelAnimationFrame(v.raf); v.raf = requestAnimationFrame(tick); };
   v.pause = () => { v.playing = false; cancelAnimationFrame(v.raf); setPlayIcon(play, false); };
   play.addEventListener("click", () => (v.playing ? v.pause() : v.play()));
   card.querySelector('[data-act="restart"]').addEventListener("click", () => { v.t = 0; v.play(); });
   scrub.addEventListener("input", () => { v.dragging = true; v.pause(); v.t = Number(scrub.value) / 1000; v.draw(); });
-  scrub.addEventListener("change", () => (v.dragging = false));
+  onScrubRelease(scrub, () => (v.dragging = false));
   card.querySelector('[data-act="mountain"]')?.addEventListener("change", (e) => { v.mountain = e.target.checked; v.draw(); });
   setPlayIcon(play, false);
   return v;

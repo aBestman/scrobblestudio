@@ -101,7 +101,7 @@ function drawSong() {
   const c = $("#songCanvas"), d = sd.rank;
   const dpr = window.devicePixelRatio || 1;
   const W = c.clientWidth || 800, narrow = W < 600;
-  const H = narrow ? 260 : 320;
+  const H = narrow ? 310 : 340;
   if (c.width !== Math.round(W * dpr) || c.height !== Math.round(H * dpr)) {
     c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); c.style.height = H + "px";
   }
@@ -120,53 +120,81 @@ function drawSong() {
     ctx.fillText("Not played in this period yet", W / 2, H / 2);
     return;
   }
-  // Rank axis on a log scale (#1 at the top), so climbing from #5,000 to #50 and from #50 to #5 both show.
+  // A moving bar: left-right = the song's position among all your songs (#1 on the far right, log scale so
+  // #8,000 → #200 shows as clearly as #20 → #1); height = its plays in the last 365 days at that moment.
   const worst = Math.max(...known), decades = Math.max(1, Math.ceil(Math.log10(Math.max(worst, 2))));
-  const L = narrow ? 46 : 58, R = 14, T = narrow ? 64 : 74, B = 30;
-  const x = (i) => L + (N > 1 ? (i / (N - 1)) * (W - L - R) : 0);
-  const y = (r) => T + (Math.log10(r) / decades) * (H - T - B);
+  const maxRoll = Math.max(1, ...d.rolling);
+  const step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500].find((s) => maxRoll / s <= 5) || 1000;
+  const top = Math.ceil(maxRoll / step) * step;
+  const L = narrow ? 38 : 48, R = narrow ? 14 : 22, T = narrow ? 104 : 90, B = 40;
+  const x = (rank) => L + (1 - Math.log10(rank) / decades) * (W - L - R);
+  const y = (v) => H - B - (v / top) * (H - T - B);
 
   ctx.font = "11px Segoe UI, system-ui, sans-serif";
+  ctx.lineWidth = 1;
   ctx.textAlign = "right"; ctx.textBaseline = "middle";
-  for (let k = 0; k <= decades; k++) {
-    const r = 10 ** k, yy = y(r);
-    ctx.strokeStyle = line; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(L, yy); ctx.lineTo(W - R, yy); ctx.stroke();
-    ctx.fillStyle = muted; ctx.fillText(`#${fmt(r)}`, L - 6, yy);
+  for (let v = 0; v <= top; v += step) {                 // height: plays in the last 365 days
+    ctx.strokeStyle = line;
+    ctx.beginPath(); ctx.moveTo(L, y(v)); ctx.lineTo(W - R, y(v)); ctx.stroke();
+    ctx.fillStyle = muted; ctx.fillText(fmt(v), L - 6, y(v));
   }
-  ctx.textBaseline = "alphabetic";
-  ctx.textAlign = "left"; ctx.fillText(niceDate(d.labels[0]), L, H - 10);
-  ctx.textAlign = "right"; ctx.fillText(niceDate(d.labels[N - 1]), W - R, H - 10);
-
-  const pos = sd.t * (N - 1), cur = Math.min(N - 1, Math.floor(pos));
-  const path = (upto) => {
-    ctx.beginPath();
-    let on = false;
-    for (let i = 0; i <= upto; i++) {
-      if (ranks[i] === null) { on = false; continue; }
-      if (on) ctx.lineTo(x(i), y(ranks[i])); else { ctx.moveTo(x(i), y(ranks[i])); on = true; }
-    }
-    ctx.stroke();
-  };
-  ctx.lineJoin = "round";
-  ctx.strokeStyle = muted + "55"; ctx.lineWidth = 1.5; path(N - 1);      // the whole story, faint
-  ctx.strokeStyle = accent; ctx.lineWidth = 2.5; path(cur);              // up to the current moment
-
-  // Current moment: dot, rank, date, plays so far
-  const r = ranks[cur];
+  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  for (let k = decades; k >= 0; k--) {                    // position: #10,000 … #10, #1
+    const xx = x(10 ** k);
+    ctx.strokeStyle = line;
+    ctx.beginPath(); ctx.moveTo(xx, H - B); ctx.lineTo(xx, H - B + 4); ctx.stroke();
+    ctx.fillStyle = muted; ctx.fillText(`#${fmt(10 ** k)}`, Math.min(W - R - 8, Math.max(L + 12, xx)), H - B + 16);
+  }
+  ctx.textAlign = "right";
+  ctx.fillText(narrow ? "position → #1" : "position among all your songs → #1", W - R, H - 6);
   ctx.textAlign = "left";
-  if (r !== null) {
-    ctx.fillStyle = accent;
-    ctx.beginPath(); ctx.arc(x(cur), y(r), 5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillText(narrow ? "plays / 365 days" : "plays in the last 365 days", L, T - 10);
+
+  // Where are we? Interpolate between days so the bar glides.
+  const f = sd.t * (N - 1), i = Math.floor(f), j = Math.min(N - 1, i + 1), u = f - i;
+  const rankAt = (k) => ranks[k];
+  let rNow = rankAt(i), vNow = d.rolling[i];
+  if (rankAt(i) !== null && rankAt(j) !== null) {
+    rNow = 10 ** (Math.log10(rankAt(i)) * (1 - u) + Math.log10(rankAt(j)) * u);
+    vNow = d.rolling[i] * (1 - u) + d.rolling[j] * u;
   }
+
+  // Trail of where it has been (faint), then the bar at the current moment.
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = accent + "55"; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  let on = false;
+  for (let k = 0; k <= i; k++) {
+    if (ranks[k] === null) { on = false; continue; }
+    if (on) ctx.lineTo(x(ranks[k]), y(d.rolling[k])); else { ctx.moveTo(x(ranks[k]), y(d.rolling[k])); on = true; }
+  }
+  if (on && rNow !== null) ctx.lineTo(x(rNow), y(vNow));
+  ctx.stroke();
+
+  if (rNow !== null) {
+    const bw = narrow ? 10 : 14, bx = x(rNow) - bw / 2;
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(bx, y(vNow), bw, Math.max(2, y(0) - y(vNow)), [4, 4, 0, 0]) : ctx.rect(bx, y(vNow), bw, y(0) - y(vNow));
+    ctx.fill();
+  }
+
+  // Header: rank and rolling-year plays now, date and totals
+  const rShown = ranks[Math.round(f)] ?? rankAt(i);
+  ctx.textAlign = "left";
   ctx.fillStyle = ink;
   ctx.font = `700 ${narrow ? 28 : 36}px Segoe UI, system-ui, sans-serif`;
-  ctx.fillText(r === null ? "not yet played" : `#${fmt(r)}`, L, narrow ? 34 : 40);
+  const big = rShown === null ? "not yet played" : `#${fmt(rShown)}`;
+  ctx.fillText(big, L, narrow ? 34 : 40);
+  const bigW = ctx.measureText(big).width;
+  ctx.font = `600 ${narrow ? 13 : 15}px Segoe UI, system-ui, sans-serif`;
+  ctx.fillStyle = accent;
+  // Phones: the rolling-year number goes on its own line under the rank
+  ctx.fillText(`${fmt(d.rolling[Math.round(f)])} plays in the last 365 days`, narrow ? L : L + bigW + 12, narrow ? 54 : 40);
   ctx.fillStyle = muted;
   ctx.font = "12px Segoe UI, system-ui, sans-serif";
-  ctx.fillText(r === null ? niceDate(d.labels[cur])
-    : `of ${fmt(d.total[cur])} songs · ${niceDate(d.labels[cur])} · ${fmt(d.plays[cur])} plays${sd.range === "all" ? "" : " in this period"}`,
-    L, narrow ? 52 : 60);
+  ctx.fillText(`${niceDate(d.labels[Math.round(f)])} · of ${fmt(d.total[Math.round(f)])} songs · ${fmt(d.plays[Math.round(f)])} plays${sd.range === "all" ? " in total" : " in this period"}`,
+    L, narrow ? 72 : 60);
   if (!sd.dragging) $("#songScrub").value = Math.round(sd.t * 1000);
 }
 

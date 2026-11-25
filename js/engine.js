@@ -625,7 +625,19 @@
       plays.push(c);
       total.push(counts.size);
     }
-    return { range, labels, rank, plays, total };
+    // Rolling year: this song's plays in the 365 days up to each day (also counting plays before the period).
+    const perDay = new Map();
+    for (const r of E.rows) if (r.key === key) perDay.set(r.ymd, (perDay.get(r.ymd) || 0) + 1);
+    const days = [...perDay.keys()].sort();
+    const rolling = [];
+    let sum = 0, inW = 0, outW = 0;                       // window = days (in, out] index pointers over `days`
+    for (const day of labels) {
+      const dn = dayNum(day);
+      while (inW < days.length && dayNum(days[inW]) <= dn) sum += perDay.get(days[inW++]);
+      while (outW < inW && dayNum(days[outW]) <= dn - 365) sum -= perDay.get(days[outW++]);
+      rolling.push(sum);
+    }
+    return { range, labels, rank, plays, total, rolling };
   }
   // ------------------------------------------------------------------ Bar race: values per step for an animated ranking
   const weekCache = new Map();
